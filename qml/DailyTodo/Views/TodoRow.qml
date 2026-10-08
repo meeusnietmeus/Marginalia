@@ -1,15 +1,20 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Controls.impl  // IconImage
 import QtQuick.Layouts
 import DailyTodo.Style
 import DailyTodo.Controls
 
-// One todo: checkbox, text (right-click: Copy / Edit), inline editor and row actions.
+// One todo: checkbox, text (right-click: Copy / Edit / its flags / moves), inline editor and row
+// actions. A priority todo has an ember flag in front of its text; one in progress a half-filled
+// amber checkbox.
 // Doesn't talk to the backend itself; it only emits signals.
 RowLayout {
     id: row
 
-    property var todo: ({ id: -1, text: "", done: false })
+    property var todo: ({ id: -1, text: "", done: false, priority: false, inProgress: false })
+    readonly property bool priority: todo.priority === true
+    readonly property bool inProgress: todo.inProgress === true && !todo.done
     property bool muted: false             // e.g. a past day: dimmer text
     property bool canMoveToToday: false
     property bool moveHighlighted: false   // light the move button up (hovering "move all to today")
@@ -24,6 +29,8 @@ RowLayout {
     signal moveToBacklogRequested()
     signal moveToDayRequested(string iso)  // the user picked a day on the calendar
     signal doneToggled(bool done)
+    signal priorityToggled(bool priority)
+    signal inProgressToggled(bool inProgress)
     signal edited(string text)             // only emitted when the text actually changed
     signal copyRequested()
     signal moveToTodayRequested()
@@ -63,7 +70,18 @@ RowLayout {
 
     AppCheckBox {
         checked: row.todo.done
+        inProgress: row.inProgress
         onToggled: row.doneToggled(checked)
+    }
+
+    // a priority: an ember flag in front of the text
+    IconImage {
+        visible: row.priority && !row.editing
+        Layout.alignment: Qt.AlignVCenter
+        Layout.leftMargin: 2
+        source: Theme.iconFlag
+        sourceSize: Qt.size(13, 13)
+        color: row.todo.done ? Qt.alpha(Theme.priority, 0.45) : Theme.priority
     }
 
     // ---- normal view ----
@@ -73,6 +91,7 @@ RowLayout {
         controller: row.controller
         source: row.todo.text
         font.pixelSize: 14
+        font.weight: row.priority && !row.todo.done ? Font.DemiBold : Font.Normal
         font.strikeout: row.todo.done
         baseColor: row.todo.done ? Theme.textDone
                  : row.muted ? Theme.textMuted : Theme.text
@@ -92,6 +111,23 @@ RowLayout {
                     onTriggered: row.copyRequested()
                 }
             ]
+
+            // its flags, each a switch in its own colour
+            AppMenuToggle {
+                text: "Priority"
+                iconSource: Theme.iconFlag
+                tint: Theme.priority
+                active: row.priority
+                onSwitched: (on) => row.priorityToggled(on)
+            }
+            AppMenuToggle {
+                text: "In progress"
+                iconSource: Theme.iconProgress
+                tint: Theme.inProgress
+                active: row.inProgress
+                onSwitched: (on) => row.inProgressToggled(on)
+            }
+            AppMenuSeparator {}
 
             // A backlog todo can only go to the timeline; a dated one to the backlog or another day.
             AppMenuItem {

@@ -95,6 +95,8 @@ QtObject {
     readonly property color now: "#ff5a4a"             // "now": today's node
     readonly property color ringTrack: Qt.rgba(1.0, 0.92, 0.82, 0.12)     // the empty part of a ring
     readonly property color ringDone: "#62c37a"        // the done part
+    readonly property color priority: "#ff6f52"          // a todo flagged as a priority: an ember flag
+    readonly property color inProgress: "#f5b950"        // a todo being worked on: amber
     readonly property color ringMissed: Qt.rgba(0.95, 0.61, 0.61, 0.55)   // open todos on a past day
     readonly property real labelSpacing: 1.3           // letter spacing of the small uppercase labels
     // a little depth: raised surfaces catch light on their top edge and cast a soft shadow,
@@ -168,6 +170,8 @@ QtObject {
     readonly property url iconZoomIn: Qt.resolvedUrl("icons/zoom-in.svg")
     readonly property url iconZoomOut: Qt.resolvedUrl("icons/zoom-out.svg")
     readonly property url iconLink: Qt.resolvedUrl("icons/link.svg")
+    readonly property url iconFlag: Qt.resolvedUrl("icons/flag.svg")
+    readonly property url iconProgress: Qt.resolvedUrl("icons/progress.svg")
 
     // ---- library resource cards: icon + gradient colour per kind of resource ----
     readonly property color resourcePdf: "#c8504b"

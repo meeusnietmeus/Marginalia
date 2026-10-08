@@ -111,6 +111,10 @@ brings the running window to the front instead of opening a second one.
   resource's right-click menu and its edit / delete dialogs: one instance in `Main.qml`, handed
   to the library, "Jump back in" and the resource tabs), `NumberField` and `LazyPage` (a page that
   unloads itself 5 minutes after it was left: Open questions and Knowledge graph).
+- **Todo flags:** a todo can be a *priority* (an ember flag before its text) and *in progress* (a
+  half-filled amber checkbox), both switched from its right-click menu
+  (`Controls/AppMenuToggle.qml`). Done and in progress rule each other out (the repository sees
+  to it); a done todo keeps its priority.
 - **Clicks and hover:** anything clicked uses `Controls/ClickHandler.qml` (not a plain
   `TapHandler`, which lets the click through to whatever is underneath, even through a popup), and
   anything that floats over the page as a plain item puts `Controls/InputBlocker.qml` at its back

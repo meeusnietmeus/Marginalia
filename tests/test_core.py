@@ -24,7 +24,8 @@ class BuildDaysTest(unittest.TestCase):
         todos = [Todo(1, "old", False, past)]
         rows = build_days(todos, THU, missed_days(todos, THU))
         self.assertEqual(rows[0].kind, "past")
-        self.assertEqual(rows[0].todos, [{"id": 1, "text": "old", "done": False}])
+        self.assertEqual(rows[0].todos, [{"id": 1, "text": "old", "done": False,
+                                          "priority": False, "inProgress": False}])
         self.assertEqual(rows[0].week_label, "Last week")
 
     def test_backlog_todos_are_not_on_the_timeline(self):

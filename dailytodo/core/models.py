@@ -19,6 +19,8 @@ class Todo:
     text: str
     done: bool
     day: date | None  # None = in the backlog (no date yet)
+    priority: bool = False  # flagged as important
+    in_progress: bool = False  # being worked on (a done todo is never in progress)
 
 
 @dataclass(frozen=True, slots=True)

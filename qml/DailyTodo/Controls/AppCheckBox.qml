@@ -5,7 +5,8 @@ import QtQuick.Shapes
 import DailyTodo.Style
 
 // Small round checkbox. Open, it is a little hole sunk into the surface; checked, a raised green
-// bead with a dark tick, which pops as it fills.
+// bead with a dark tick, which pops as it fills. Open and `inProgress`: the hole has an amber rim
+// and its left half is filled, half way to done.
 CheckBox {
     id: control
 
@@ -13,6 +14,8 @@ CheckBox {
     implicitHeight: 24
     padding: 0
     hoverEnabled: true
+
+    property bool inProgress: false
 
     contentItem: Item {}   // no text, indicator only
 
@@ -43,7 +46,27 @@ CheckBox {
             anchors.fill: parent
             radius: width / 2
             color: control.hovered ? Qt.lighter(Theme.well, 1.25) : Theme.well
-            border.color: control.hovered ? Theme.textMuted : Theme.hairlineStrong
+            border.color: control.inProgress ? Qt.alpha(Theme.inProgress, control.hovered ? 1 : 0.8)
+                        : control.hovered ? Theme.textMuted : Theme.hairlineStrong
+            border.width: control.inProgress ? 1.5 : 1
+            // in progress: the left half filled
+            Item {
+                visible: control.inProgress
+                x: 3
+                y: 3
+                width: (parent.width - 6) / 2
+                height: parent.height - 6
+                clip: true
+                Rectangle {
+                    width: parent.height
+                    height: parent.height
+                    radius: width / 2
+                    gradient: Gradient {
+                        GradientStop { position: 0; color: Qt.lighter(Theme.inProgress, 1.1) }
+                        GradientStop { position: 1; color: Qt.darker(Theme.inProgress, 1.2) }
+                    }
+                }
+            }
             Rectangle {                         // shade inside its top half (same circle)
                 anchors.fill: parent
                 anchors.margins: 1

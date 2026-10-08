@@ -46,7 +46,9 @@ CREATE TABLE {table} (
     text         TEXT    NOT NULL,
     is_completed INTEGER NOT NULL DEFAULT 0 CHECK (is_completed IN (0, 1)),
     date         TEXT,                       -- ISO format: YYYY-MM-DD; NULL = backlog
-    workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE
+    workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    priority     INTEGER NOT NULL DEFAULT 0 CHECK (priority IN (0, 1)),
+    in_progress  INTEGER NOT NULL DEFAULT 0 CHECK (in_progress IN (0, 1))
 );
 """
 
@@ -217,6 +219,7 @@ class SqliteTodoRepository(TodoRepository):
             conn.executescript(MIGRATE_TODOS)
         conn.executescript(_create_todos("IF NOT EXISTS todos"))
         self._migrate_todos()
+        self._migrate_todo_flags()
         conn.execute(TODOS_INDEX)
         conn.executescript(RESOURCES_SCHEMA)
         self._migrate_resources()
@@ -248,6 +251,20 @@ class SqliteTodoRepository(TodoRepository):
                 "DROP TABLE todos;"
                 "ALTER TABLE todos_new RENAME TO todos;"
                 "COMMIT;"
+            )
+
+    def _migrate_todo_flags(self) -> None:
+        """Todos created before the priority and in-progress flags existed."""
+        conn = self._conn
+        columns = {r["name"] for r in conn.execute("PRAGMA table_info(todos)")}
+        if "priority" not in columns:
+            conn.execute(
+                "ALTER TABLE todos ADD COLUMN priority INTEGER NOT NULL DEFAULT 0 CHECK (priority IN (0, 1))"
+            )
+        if "in_progress" not in columns:
+            conn.execute(
+                "ALTER TABLE todos ADD COLUMN in_progress INTEGER NOT NULL DEFAULT 0"
+                " CHECK (in_progress IN (0, 1))"
             )
 
     def _migrate_notes(self) -> None:
@@ -736,7 +753,7 @@ class SqliteTodoRepository(TodoRepository):
     def list_todos(self, workspace_id: WorkspaceId) -> list[Todo]:
         with _translate_errors():
             rows = self._conn.execute(
-                "SELECT id, text, is_completed, date FROM todos"
+                "SELECT id, text, is_completed, date, priority, in_progress FROM todos"
                 " WHERE workspace_id = ? ORDER BY date IS NOT NULL, date, id",  # backlog first
                 (workspace_id,),
             ).fetchall()
@@ -746,6 +763,8 @@ class SqliteTodoRepository(TodoRepository):
                     r["text"],
                     bool(r["is_completed"]),
                     date.fromisoformat(r["date"]) if r["date"] else None,
+                    bool(r["priority"]),
+                    bool(r["in_progress"]),
                 )
                 for r in rows
             ]
@@ -761,8 +780,22 @@ class SqliteTodoRepository(TodoRepository):
 
     def set_done(self, todo_id: TodoId, done: bool) -> None:
         with _translate_errors(), self._conn:
+            # a todo that is done is no longer in progress
             self._conn.execute(
-                "UPDATE todos SET is_completed = ? WHERE id = ?", (int(done), todo_id)
+                "UPDATE todos SET is_completed = ?, in_progress = in_progress * (1 - ?) WHERE id = ?",
+                (int(done), int(done), todo_id),
+            )
+
+    def set_priority(self, todo_id: TodoId, priority: bool) -> None:
+        with _translate_errors(), self._conn:
+            self._conn.execute("UPDATE todos SET priority = ? WHERE id = ?", (int(priority), todo_id))
+
+    def set_in_progress(self, todo_id: TodoId, in_progress: bool) -> None:
+        with _translate_errors(), self._conn:
+            # starting on a todo that was done makes it open again
+            self._conn.execute(
+                "UPDATE todos SET in_progress = ?, is_completed = is_completed * (1 - ?) WHERE id = ?",
+                (int(in_progress), int(in_progress), todo_id),
             )
 
     def move_to_day(self, todo_id: TodoId, day: date | None) -> None:
@@ -789,8 +822,10 @@ class SqliteTodoRepository(TodoRepository):
     def restore_todo(self, workspace_id: WorkspaceId, todo: Todo) -> None:
         with _translate_errors(), self._conn:
             self._conn.execute(
-                "INSERT INTO todos (id, text, is_completed, date, workspace_id) VALUES (?, ?, ?, ?, ?)",
-                (todo.id, todo.text, int(todo.done), todo.day.isoformat() if todo.day else None, workspace_id),
+                "INSERT INTO todos (id, text, is_completed, date, workspace_id, priority, in_progress)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (todo.id, todo.text, int(todo.done), todo.day.isoformat() if todo.day else None,
+                 workspace_id, int(todo.priority), int(todo.in_progress)),
             )
 
     def close(self) -> None:
