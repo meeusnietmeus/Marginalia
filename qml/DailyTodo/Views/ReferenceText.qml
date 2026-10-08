@@ -5,7 +5,8 @@ import DailyTodo.Style
 // Todo text as stored (with `@{id|name}` / `!{id|name}`), rendered with its references:
 //   * a resource is normal-coloured text with a dotted underline (click to open it, like a card
 //     in the library)
-//   * a tag is normal-coloured text on a slightly lighter background, like a chip
+//   * a tag is normal-coloured text on a slightly lighter background, like a chip (click to see
+//     it in the Knowledge graph)
 //   * a reference to something that was deleted stays as dim, struck-through text
 // A web address, written bare or as [name](address), is a link too (accent coloured).
 // A read-only TextEdit rather than a Text, because it can tell where each character is drawn
@@ -39,8 +40,8 @@ TextEdit {
                 out += "<a href=\"resource:" + p.id + "\"><span style=\"color:" + baseColor + ";\">"
                      + esc(p.text) + "</span></a>"
             else if (p.type === "tag" && !p.missing)
-                out += "<span style=\"background-color:" + Theme.hover + ";\">&nbsp;"
-                     + esc(p.text) + "&nbsp;</span>"
+                out += "<a href=\"tag:" + p.id + "\"><span style=\"background-color:" + Theme.hover
+                     + ";color:" + baseColor + ";\">&nbsp;" + esc(p.text) + "&nbsp;</span></a>"
             else if (p.missing)
                 out += "<span style=\"color:" + Theme.textFaint + ";\"><s>" + esc(p.text) + "</s></span>"
             else
@@ -127,7 +128,8 @@ TextEdit {
     selectByMouse: false
     color: baseColor
 
-    // A resource opens like its card in the library, a web address in the browser.
+    // A resource opens like its card in the library, a tag in the Knowledge graph, a web address
+    // in the browser.
     onLinkActivated: (link) => {
         if (controller)
             controller.openLink(link.indexOf("link:") === 0 ? link.substring(5) : link)
