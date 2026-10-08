@@ -123,6 +123,7 @@ class TodoController(QObject):
     resourceRemoved = Signal(int)  # a resource is gone for good: close its PDF tab
     pdfScrollSpeedChanged = Signal()
     recentChanged = Signal()  # what was opened last, or where a PDF was left, changed
+    tagRequested = Signal(int)  # a tag was clicked in some text: show it (the Knowledge graph)
     # A capture from outside (the browser extension, see ``handleLink``):
     captureReady = Signal(int, str, int)  # (resource id, note|question, seconds): its tab is open, open the box
     captureNeedsResource = Signal(str, str, str, int)  # (link, its title, note|question, seconds): nothing has that link yet
@@ -1315,10 +1316,12 @@ class TodoController(QObject):
 
     @Slot(str)
     def openLink(self, link: str) -> None:
-        """A link in note text: ``resource:<id>`` opens that resource, anything else is a web
-        address."""
+        """A link in note text: ``resource:<id>`` opens that resource, ``tag:<id>`` shows that tag
+        (``tagRequested``: the Knowledge graph goes to it), anything else is a web address."""
         if link.startswith("resource:") and link[9:].isdigit():
             self.openResourceById(int(link[9:]))
+        elif link.startswith("tag:") and link[4:].isdigit():
+            self.tagRequested.emit(int(link[4:]))
         else:
             self.openResource(link)
 

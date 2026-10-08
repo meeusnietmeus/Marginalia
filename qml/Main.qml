@@ -222,7 +222,9 @@ ApplicationWindow {
         }
         LazyPage {
             id: graphPage
+            property int tagToShow: -2           // asked for before the page was made
             shown: root.currentView === "graph"
+            onLoaded: if (tagToShow > -2) { item.showTag(tagToShow); tagToShow = -2 }
             sourceComponent: KnowledgeGraphPage { controller: root.controller; actions: resourceActions }
         }
 
@@ -389,6 +391,12 @@ ApplicationWindow {
         function onNotesRequested(resourceId, name, uri, page) { root.openNotes(resourceId, name, uri, page) }
         function onVideoRequested(resourceId, name, uri, page) { root.openVideo(resourceId, name, uri, page) }
         function onCaptureReady(resourceId, kind, seconds) { root.openCaptureBox(resourceId, kind, seconds) }
+        // a tag clicked in a todo or a note: the Knowledge graph, at that tag
+        function onTagRequested(tagId) {
+            root.currentView = "graph"
+            if (graphPage.item) graphPage.item.showTag(tagId)
+            else graphPage.tagToShow = tagId
+        }
         function onCaptureNeedsResource(link, title, kind, seconds) { captureDialog.ask(link, title, kind, seconds) }
         // its notes went with it: the tab could only show errors now
         function onResourceRemoved(resourceId) { root.closeTabsOf(resourceId) }

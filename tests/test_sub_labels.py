@@ -176,6 +176,14 @@ class LabelControllerTest(unittest.TestCase):
         self.assertEqual(family["Algebra"], family["Maths"])
         self.assertNotEqual(family["Biology"], family["Maths"])
 
+    def test_clicking_a_tag_in_text_asks_to_show_it(self):
+        asked, opened = [], []
+        self.ctl.tagRequested.connect(asked.append)
+        self.ctl.openResource = opened.append            # nothing really opened in a test
+        self.ctl.openLink(f"tag:{self.algebra}")
+        self.ctl.openLink("tag:nonsense")          # not a tag id: treated as a web address
+        self.assertEqual((asked, opened), ([self.algebra], ["tag:nonsense"]))
+
     def test_the_tag_picker_says_where_a_sub_tag_sits(self):
         found = self.ctl.searchReferences("!", "alg")
         self.assertEqual((found[0]["name"], found[0]["hint"]), ("Algebra", "Maths"))

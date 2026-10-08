@@ -99,6 +99,17 @@ Item {
         foundId = id
         foundTimer.restart()
     }
+    // Show one tag: pick it in the legend and go to its region (a tag without a region of its own,
+    // nothing tagged with it, is only picked). Asked for before the graph is built, it waits.
+    property int pendingTag: -2
+    function showTag(tag) {
+        if (!graph.built) { pendingTag = tag; return }
+        pendingTag = -2
+        focusTag = tag
+        if (regionByTag[tag]) goToRegion(tag)
+        else fit(true)
+    }
+
     function zoomAt(point, factor) {
         flight.stop()
         const next = Math.max(minZoom, Math.min(maxZoom, zoom * factor))
@@ -136,8 +147,11 @@ Item {
             if (page.focusTag >= 0 && page.regionByTag[page.focusTag] === undefined
                     && !page.graph.areas.some(a => a.tag === page.focusTag))
                 page.focusTag = -2
-            page.fit(false)
+            // the picked tag stays in view through a rebuild; otherwise everything is shown
+            if (page.focusTag > -2 && page.regionByTag[page.focusTag]) page.goToRegion(page.focusTag)
+            else page.fit(false)
             canvas.requestPaint()
+            if (page.pendingTag > -2) Qt.callLater(page.showTag, page.pendingTag)
         }
     }
 
