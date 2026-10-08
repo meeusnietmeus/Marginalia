@@ -255,6 +255,8 @@ Item {
                             moveHighlighted: header.moveAllHovered
                             canMoveToToday: day.isPast && !todoItem.modelData.done
                             onDoneToggled: (done) => day.controller.setDone(todoItem.modelData.id, done)
+                            onPriorityToggled: (on) => day.controller.setPriority(todoItem.modelData.id, on)
+                            onInProgressToggled: (on) => day.controller.setInProgress(todoItem.modelData.id, on)
                             onEdited: (text) => day.controller.editTodo(todoItem.modelData.id, text)
                             onCopyRequested: day.controller.copyText(day.controller.toEditText(todoItem.modelData.text))
                             onMoveToTodayRequested: day.controller.moveToToday(todoItem.modelData.id)

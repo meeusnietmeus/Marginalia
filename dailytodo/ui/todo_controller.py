@@ -1178,7 +1178,18 @@ class TodoController(QObject):
 
     @Slot(int, bool)
     def setDone(self, todo_id: TodoId, done: bool) -> None:
+        """Done or not; a todo that is done is no longer in progress."""
         self._mutate(lambda: self._repo.set_done(todo_id, done))
+
+    @Slot(int, bool)
+    def setPriority(self, todo_id: TodoId, priority: bool) -> None:
+        """Flag a todo as a priority (or not)."""
+        self._mutate(lambda: self._repo.set_priority(todo_id, priority))
+
+    @Slot(int, bool)
+    def setInProgress(self, todo_id: TodoId, in_progress: bool) -> None:
+        """Mark a todo as being worked on (or not); one that was done is open again."""
+        self._mutate(lambda: self._repo.set_in_progress(todo_id, in_progress))
 
     @Slot(str)
     def addBacklogTodo(self, text: str) -> None:

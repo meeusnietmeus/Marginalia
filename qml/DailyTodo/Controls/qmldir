@@ -28,3 +28,4 @@ GlassPanel 1.0 GlassPanel.qml
 ClickHandler 1.0 ClickHandler.qml
 InputBlocker 1.0 InputBlocker.qml
 NumberField 1.0 NumberField.qml
+AppMenuToggle 1.0 AppMenuToggle.qml

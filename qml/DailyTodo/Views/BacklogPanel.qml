@@ -68,6 +68,8 @@ SideColumn {
             required property int todoId
             required property string text
             required property bool done
+            required property bool priority
+            required property bool inProgress
 
             width: ListView.view.width
             height: row.implicitHeight + 14
@@ -88,9 +90,12 @@ SideColumn {
                 anchors.verticalCenter: parent.verticalCenter
                 controller: backlog.controller
                 inBacklog: true
-                todo: ({ id: item.todoId, text: item.text, done: item.done })
+                todo: ({ id: item.todoId, text: item.text, done: item.done,
+                         priority: item.priority, inProgress: item.inProgress })
 
                 onDoneToggled: (done) => backlog.controller.setDone(item.todoId, done)
+                onPriorityToggled: (on) => backlog.controller.setPriority(item.todoId, on)
+                onInProgressToggled: (on) => backlog.controller.setInProgress(item.todoId, on)
                 onEdited: (text) => backlog.controller.editTodo(item.todoId, text)
                 onCopyRequested: backlog.controller.copyText(backlog.controller.toEditText(item.text))
                 onDeleteRequested: backlog.controller.deleteTodo(item.todoId)

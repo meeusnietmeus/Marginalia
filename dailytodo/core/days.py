@@ -25,7 +25,7 @@ class DayRow:
     title: str  # "Yesterday" / "Today" / "Tomorrow" / weekday name
     date_label: str  # "30 Sep" (+ year when not the current year)
     kind: DayKind
-    todos: list[dict]  # [{"id", "text", "done"}], plain dicts so QML gets JS objects
+    todos: list[dict]  # [{"id", "text", "done", "priority", "inProgress"}]: plain dicts, so QML gets JS objects
     week_label: str  # "Next week" etc. on the first day of a week, "" otherwise
 
 
@@ -81,7 +81,8 @@ def build_days(todos: list[Todo], today: date, pinned_past: set[date]) -> list[D
     by_date: dict[date, list[dict]] = defaultdict(list)
     for t in todos:
         if t.day is not None:  # backlog todos are not on the timeline
-            by_date[t.day].append({"id": t.id, "text": t.text, "done": t.done})
+            by_date[t.day].append({"id": t.id, "text": t.text, "done": t.done,
+                                   "priority": t.priority, "inProgress": t.in_progress})
 
     # Shown days: missed past days + today through the end of the last visible week.
     # Todos dated further out exist in storage but stay hidden until their week is in range.

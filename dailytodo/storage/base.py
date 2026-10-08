@@ -214,7 +214,15 @@ class TodoRepository(ABC):
         """Add a todo; ``day`` None puts it in the backlog."""
 
     @abstractmethod
-    def set_done(self, todo_id: TodoId, done: bool) -> None: ...
+    def set_done(self, todo_id: TodoId, done: bool) -> None:
+        """Done or not; a todo that is done is no longer in progress."""
+
+    @abstractmethod
+    def set_priority(self, todo_id: TodoId, priority: bool) -> None: ...
+
+    @abstractmethod
+    def set_in_progress(self, todo_id: TodoId, in_progress: bool) -> None:
+        """In progress or not; a todo that is put in progress is no longer done."""
 
     @abstractmethod
     def move_to_day(self, todo_id: TodoId, day: date | None) -> None:
