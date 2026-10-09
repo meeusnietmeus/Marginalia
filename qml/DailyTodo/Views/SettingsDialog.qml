@@ -4,7 +4,7 @@ import QtQuick.Layouts
 import DailyTodo.Style
 import DailyTodo.Controls
 
-// Modal settings window: the PDF scroll speed and the export action.
+// Modal settings window: the PDF scroll speed, a help link and the export action.
 AppDialog {
     id: dialog
 
@@ -82,6 +82,35 @@ AppDialog {
                     color: speedSlider.pressed ? Theme.accentHover : Theme.text
                 }
                 HoverHandler { cursorShape: Qt.PointingHandCursor }
+            }
+        }
+
+        // Help: where to look things up.
+        ColumnLayout {
+            spacing: 6
+            Layout.fillWidth: true
+
+            Label {
+                text: "Help"
+                font.pixelSize: 12
+                color: Theme.textMuted
+            }
+            Label {
+                id: mathHelp
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                font.pixelSize: 13
+                color: Theme.accent
+                font.underline: mathHelpHover.hovered
+                text: "Formula symbols for $...$ (mathtext)"
+
+                HoverHandler {
+                    id: mathHelpHover
+                    cursorShape: Qt.PointingHandCursor
+                }
+                TapHandler {
+                    onTapped: Qt.openUrlExternally("https://matplotlib.org/stable/users/explain/text/mathtext.html")
+                }
             }
         }
 

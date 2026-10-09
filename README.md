@@ -9,6 +9,13 @@ python main.py [--db PATH] [--title TEXT] [--open marginalia://...]
 python -m unittest                # tests (set QT_QPA_PLATFORM=offscreen if there's no display)
 ```
 
+## Dependencies
+
+`requirements.txt` pins every package to an exact version (`pip install -r requirements.txt`).
+Pinned versions don't update themselves, so check the packages for significant new releases and
+security fixes every now and then (`pip list --outdated`, or the release notes of PySide6 and
+matplotlib), then bump the pins deliberately and run the tests.
+
 ## Layout
 
 ```

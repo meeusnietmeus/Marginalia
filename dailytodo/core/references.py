@@ -15,6 +15,7 @@ import re
 from typing import Callable, Sequence
 
 from .links import split_links
+from .markdown import style_pieces
 
 ACTIVATORS = {"@": "resource", "!": "tag"}
 _SYMBOL = {kind: symbol for symbol, kind in ACTIVATORS.items()}
@@ -34,7 +35,8 @@ def sanitize_name(name: str) -> str:
 
 def segments(stored: str, name_of: NameOf) -> list[dict]:
     """Split stored text into pieces: {"type": "text" | "link" | "resource" | "tag", "text", "id",
-    "missing", "url"} (a link is ``[name](address)`` or a bare web address).
+    "missing", "url", "bold", "italic"} (a link is ``[name](address)`` or a bare web address;
+    bold / italic / bullets come from ``markdown.style_pieces``, which also drops their markers).
 
     A reference to something that no longer exists keeps its saved name and is marked missing.
     """
@@ -58,7 +60,7 @@ def segments(stored: str, name_of: NameOf) -> list[dict]:
         position = match.end()
     if position < len(stored):
         pieces += _text_pieces(stored[position:])
-    return pieces
+    return style_pieces(pieces)
 
 
 def _text_pieces(text: str) -> list[dict]:
