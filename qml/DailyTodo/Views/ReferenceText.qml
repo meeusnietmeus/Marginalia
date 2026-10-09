@@ -8,6 +8,7 @@ import DailyTodo.Style
 //   * a tag is normal-coloured text on a slightly lighter background, like a chip (click to see
 //     it in the Knowledge graph)
 //   * a reference to something that was deleted stays as dim, struck-through text
+// **bold**, *italic*, "- " bullets and $formulas$ are drawn from the raw text (core/markdown.py).
 // A web address, written bare or as [name](address), is a link too (accent coloured).
 // A read-only TextEdit rather than a Text, because it can tell where each character is drawn
 // (positionToRectangle). Qt Quick cannot draw a dotted underline, so the links' own underline is
@@ -29,9 +30,27 @@ TextEdit {
                 .replace(/\n/g, "<br>")
     }
 
+    // A $formula$ is a picture, one character wide in the document. A formula that can't be drawn
+    // stays as typed.
+    function formula(latex) {
+        const image = controller ? controller.formulaImage(latex, "" + baseColor, font.pixelSize) : ({})
+        if (!image.url)
+            return esc("$" + latex + "$")
+        return "<img src=\"" + image.url + "\" width=\"" + image.width + "\" height=\"" + image.height
+             + "\" style=\"vertical-align:middle;\">"
+    }
+
+    // how many characters of the document a piece takes
+    function pieceLength(p) {
+        if (p.type === "math")
+            return controller && controller.formulaImage(p.text, "" + baseColor, font.pixelSize).url ? 1 : p.text.length + 2
+        return p.text.length + (p.type === "tag" && !p.missing ? 2 : 0)
+    }
+
     function html() {
         let out = ""
         for (const p of pieces) {
+            const before = out.length
             if (p.type === "link")
                 out += "<a href=\"link:" + p.url.replace(/&/g, "&amp;").replace(/"/g, "%22") + "\"><span style=\"color:"
                      + linkColor + ";\">" + esc(p.text) + "</span></a>"
@@ -42,10 +61,15 @@ TextEdit {
             else if (p.type === "tag" && !p.missing)
                 out += "<a href=\"tag:" + p.id + "\"><span style=\"background-color:" + Theme.hover
                      + ";color:" + baseColor + ";\">&nbsp;" + esc(p.text) + "&nbsp;</span></a>"
+            else if (p.type === "math")
+                out += formula(p.text)
             else if (p.missing)
                 out += "<span style=\"color:" + Theme.textFaint + ";\"><s>" + esc(p.text) + "</s></span>"
             else
                 out += esc(p.text)
+            // **bold** and *italic* wrap whatever the piece became (also a link or a chip)
+            if (p.bold) out = out.substring(0, before) + "<b>" + out.substring(before) + "</b>"
+            if (p.italic) out = out.substring(0, before) + "<i>" + out.substring(before) + "</i>"
         }
         return out
     }
@@ -61,7 +85,7 @@ TextEdit {
         const out = []
         let pos = 0
         for (const p of pieces) {
-            const len = p.text.length + (p.type === "tag" && !p.missing ? 2 : 0)
+            const len = pieceLength(p)
             if ((p.type === "resource" || p.type === "link") && !p.missing && len > 0) {
                 const colour = p.type === "link" ? linkColor : baseColor
                 let from = pos

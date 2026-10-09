@@ -47,10 +47,28 @@ TextArea {
         available: area.references !== null
     }
 
+    // Typing the second `*` of `**` adds the closing `**` and leaves the cursor between the pairs.
+    // Only when nothing is selected and the `**` isn't already followed by `*`.
+    function autoCloseBold(event) {
+        if (event.text !== "*" || area.selectionStart !== area.selectionEnd)
+            return false
+        const at = area.cursorPosition
+        if (at < 1 || area.getText(at - 1, at) !== "*" || area.getText(Math.max(0, at - 2), at - 1) === "*"
+                || area.getText(at, at + 1) === "*")
+            return false
+        area.insert(at, "***")
+        area.cursorPosition = at + 1
+        return true
+    }
+
     // One handler for every key (Qt calls the specific Keys.onEscapePressed-style handlers before
     // Keys.onPressed, which would run before the @ / ! list gets its say).
     Keys.onPressed: (event) => {
         if (picker.handleKey(event)) {            // choosing in the @ / ! list comes first
+            event.accepted = true
+            return
+        }
+        if (autoCloseBold(event)) {
             event.accepted = true
             return
         }

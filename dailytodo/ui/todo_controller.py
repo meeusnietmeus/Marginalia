@@ -59,6 +59,7 @@ from ..core import (
     time_ago,
 )
 from ..powerpoint import ExportResult, convert_to_pptx, export_pdf
+from ..math_images import render_formula
 from ..thumbnails import cached_thumbnail, fetch_thumbnail
 from ..titles import fetch_html_title
 from ..storage import (
@@ -91,6 +92,11 @@ def _ids(values: list | None) -> list[TagId]:
 def _downloads_folder() -> Path:
     downloads = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DownloadLocation)
     return Path(downloads) if downloads else Path.home()
+
+
+def _math_folder() -> Path:
+    cache = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.TempLocation)
+    return Path(cache or ".") / "marginalia-math"
 
 
 def _thumbnail_folder() -> Path:
@@ -147,6 +153,7 @@ class TodoController(QObject):
         self._annotation_state: dict[int, str] = {}  # for the debug info
         self._exporting: set[int] = set()  # presentations being turned into a PDF right now
         self._annotations_cache: dict[tuple[str, float], list[dict]] = {}
+        self._formulas: dict[tuple[str, str, float], dict] = {}
         self._repo = repo
         self._today = today
         self._now = now
@@ -1292,6 +1299,19 @@ class TodoController(QObject):
         """Todo text split into plain / resource / tag pieces for rendering. ``revision`` only
         exists so QML can bind to ``referencesRevision`` and re-render after renames."""
         return segments(text, self._name_of)
+
+    @Slot(str, str, float, result="QVariantMap")
+    def formulaImage(self, latex: str, colour: str, pixel_size: float) -> dict:
+        """A ``$formula$`` as a picture for rich text: {"url", "width", "height"}, or {} when it
+        can't be drawn (the text then shows the formula as typed)."""
+        key = (latex, colour, pixel_size)
+        if key not in self._formulas:
+            drawn = render_formula(latex, colour, pixel_size, _math_folder())
+            self._formulas[key] = (
+                {"url": QUrl.fromLocalFile(drawn["path"]).toString(), "width": drawn["width"],
+                 "height": drawn["height"]} if drawn else {}
+            )
+        return self._formulas[key]
 
     @Slot(QQuickTextDocument)
     def styleLinks(self, quick_document: QQuickTextDocument) -> None:
