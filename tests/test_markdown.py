@@ -33,6 +33,14 @@ class MarkdownTests(unittest.TestCase):
         pieces = segments("**bold $a*b*c$ x**", lambda kind, i: "Doc")
         self.assertEqual([p["text"] for p in pieces], ["bold ", "a*b*c", " x"])
 
+    def test_inline_code_keeps_its_content_untouched(self):
+        pieces = segments("run `a **b** $x$ c` now", lambda kind, i: "Doc")
+        self.assertEqual([(p["type"], p["text"]) for p in pieces],
+                         [("text", "run "), ("code", "a **b** $x$ c"), ("text", " now")])
+
+    def test_unclosed_backtick_stays_as_typed(self):
+        self.assertEqual(shown("a ` b"), [("a ` b", False, False)])
+
 
 if __name__ == "__main__":
     unittest.main()
