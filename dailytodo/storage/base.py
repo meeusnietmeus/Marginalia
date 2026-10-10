@@ -76,7 +76,12 @@ class TodoRepository(ABC):
 
     @abstractmethod
     def touch_resource(self, resource_id: ResourceId) -> None:
-        """Record that the resource was just opened (sets ``last_used_at``)."""
+        """Record that the resource was just opened (sets ``last_used_at``; an "unopened"
+        resource becomes "opened", any other status stays)."""
+
+    @abstractmethod
+    def set_resource_status(self, resource_id: ResourceId, status: str) -> None:
+        """Set how far along a resource is (one of ``core.STATUSES``)."""
 
     @abstractmethod
     def list_tags(self, workspace_id: WorkspaceId) -> list[Tag]:

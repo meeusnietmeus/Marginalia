@@ -51,6 +51,7 @@ class GraphResource:
     missing: bool = False
     tags: tuple[str, ...] = ()  # tag names, with the ones above them (for the legend's filter)
     own: tuple[int, ...] = ()  # the ids of the tags it was given itself
+    status: str = "unopened"  # how far along it is (see resources.STATUSES)
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,6 +67,7 @@ class GraphNode:
     x: float  # centre, in layout units
     y: float
     label: str = ""  # the name as drawn: at most MAX_NAME_CHARS characters
+    status: str = "unopened"
     width: float = NODE_W  # how wide its pill is
 
 
@@ -456,7 +458,7 @@ def build_graph(
             nodes.append(GraphNode(
                 node, r.name, r.kind, r.missing, tuple(sorted(r.tags, key=str.casefold)), home[node],
                 color_of.get(home[node], -1), degree.get(node, 0), bx + nx, by + ny,
-                node_label(r.name), widths[node],
+                node_label(r.name), r.status, widths[node],
             ))
 
     # the legend counts every resource that has a tag (or one below it), wherever it is drawn

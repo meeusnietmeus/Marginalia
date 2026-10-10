@@ -34,6 +34,8 @@ PresentationInfoDialog 1.0 PresentationInfoDialog.qml
 EntryCard 1.0 EntryCard.qml
 PdfViewerPage 1.0 PdfViewerPage.qml
 UnifiedNotesPage 1.0 UnifiedNotesPage.qml
+StatusDot 1.0 StatusDot.qml
+StatusMenuItem 1.0 StatusMenuItem.qml
 NoteTextArea 1.0 NoteTextArea.qml
 ReferencePicker 1.0 ReferencePicker.qml
 ReferenceText 1.0 ReferenceText.qml

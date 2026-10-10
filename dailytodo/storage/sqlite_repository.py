@@ -9,7 +9,7 @@ from typing import Iterator, Sequence
 
 from ..core.notes import with_question_mark
 from ..core.references import referenced_resource_ids
-from ..core.resources import suggest_name
+from ..core.resources import STATUSES, suggest_name
 from ..core.models import (
     DEFAULT_HIGHLIGHT_COLOR,
     HIGHLIGHT_COLORS,
@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS resources (
     uri          TEXT    NOT NULL,           -- web link, custom protocol, or absolute file path
     created_at   TEXT    NOT NULL,           -- ISO 8601, UTC
     last_used_at TEXT    NOT NULL,           -- ISO 8601, UTC; for "most recently used" ordering
+    status       TEXT    NOT NULL DEFAULT 'unopened',  -- unopened | opened | in_progress | finished
     workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_resources_workspace ON resources(workspace_id);
@@ -307,6 +308,10 @@ class SqliteTodoRepository(TodoRepository):
                 conn.execute(
                     "UPDATE resources SET name = ? WHERE id = ?", (suggest_name(row["uri"]), row["id"])
                 )
+        if "status" not in columns:
+            conn.execute("ALTER TABLE resources ADD COLUMN status TEXT NOT NULL DEFAULT 'unopened'")
+            # what was opened before there was a status counts as opened
+            conn.execute("UPDATE resources SET status = 'opened' WHERE last_used_at <> created_at")
 
     # ------------------------------------------------------------- reads
     def list_workspaces(self) -> list[Workspace]:
@@ -330,7 +335,7 @@ class SqliteTodoRepository(TodoRepository):
     def list_resources(self, workspace_id: WorkspaceId) -> list[Resource]:
         with _translate_errors():
             rows = self._conn.execute(
-                "SELECT id, name, uri, created_at, last_used_at FROM resources"
+                "SELECT id, name, uri, created_at, last_used_at, status FROM resources"
                 " WHERE workspace_id = ? ORDER BY id",
                 (workspace_id,),
             ).fetchall()
@@ -341,6 +346,7 @@ class SqliteTodoRepository(TodoRepository):
                     r["uri"],
                     datetime.fromisoformat(r["created_at"]),
                     datetime.fromisoformat(r["last_used_at"]),
+                    r["status"],
                 )
                 for r in rows
             ]
@@ -395,9 +401,18 @@ class SqliteTodoRepository(TodoRepository):
 
     def touch_resource(self, resource_id: ResourceId) -> None:
         with _translate_errors(), self._conn:
+            # opening an unopened resource makes it "opened"; any other status stays as it is
             self._conn.execute(
-                "UPDATE resources SET last_used_at = ? WHERE id = ?", (_now(), resource_id)
+                "UPDATE resources SET last_used_at = ?,"
+                " status = CASE WHEN status = 'unopened' THEN 'opened' ELSE status END WHERE id = ?",
+                (_now(), resource_id),
             )
+
+    def set_resource_status(self, resource_id: ResourceId, status: str) -> None:
+        if status not in STATUSES:
+            raise RepositoryError(f"Unknown status: {status}")
+        with _translate_errors(), self._conn:
+            self._conn.execute("UPDATE resources SET status = ? WHERE id = ?", (status, resource_id))
 
     def list_open_questions(self, workspace_id: WorkspaceId) -> list[Note]:
         with _translate_errors():

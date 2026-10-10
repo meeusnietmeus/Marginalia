@@ -113,7 +113,7 @@ class KnowledgeGraphModel(QObject):
             every = {names[t] for t in with_ancestors(tags, c.tag_ids) if t in names}
             resources.append(
                 GraphResource(c.id, c.name, c.kind, c.missing,
-                              tuple(sorted(every, key=str.casefold)), tuple(c.tag_ids))
+                              tuple(sorted(every, key=str.casefold)), tuple(c.tag_ids), c.status)
             )
         signature = (tuple(resources), tuple(links), graph_tags)
         if signature == self._input:

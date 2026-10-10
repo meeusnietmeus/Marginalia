@@ -18,6 +18,8 @@ from PySide6.QtQuick import QQuickTextDocument
 
 from ..core import (
     SORTS,
+    STATUSES,
+    STATUS_LABELS,
     UNIFIED_FILTERS,
     DayPlanner,
     ResourceCard,
@@ -32,6 +34,7 @@ from ..core import (
     filter_and_sort,
     is_inside,
     is_local_path,
+    is_status,
     is_valid_uri,
     last_visible_day,
     pdf_markdown,
@@ -130,6 +133,7 @@ class TodoController(QObject):
     subTagsChanged = Signal()
     resourceTabsShouldClose = Signal(int)  # its PDF is about to be replaced: let go of the file
     thumbnailReady = Signal(str, str, str)  # (video link, picture file url or "", error)
+    resourceStatusChanged = Signal(int, str)  # a resource was given a status by hand: (id, status)
     resourceRemoved = Signal(int)  # a resource is gone for good: close its PDF tab
     pdfScrollSpeedChanged = Signal()
     recentChanged = Signal()  # what was opened last, or where a PDF was left, changed
@@ -914,7 +918,8 @@ class TodoController(QObject):
         if card is None:
             return {}
         return {"id": card.id, "name": card.name, "uri": card.uri, "kind": card.kind,
-                "isPath": card.is_path, "missing": card.missing, "tagIds": list(card.tag_ids)}
+                "isPath": card.is_path, "missing": card.missing, "tagIds": list(card.tag_ids),
+                "status": card.status}
 
     @Slot(int)
     def openResourceById(self, resource_id: ResourceId) -> None:
@@ -1128,6 +1133,25 @@ class TodoController(QObject):
             self.notify.emit(f"Couldn't update resource: {exc}")
             return
         self._refresh_resources()
+
+    @Slot(result="QVariantList")
+    def statuses(self) -> list[dict]:
+        """The statuses a resource can have, in order: [{"key", "label"}]."""
+        return [{"key": key, "label": STATUS_LABELS[key]} for key in STATUSES]
+
+    @Slot(int, str)
+    def setResourceStatus(self, resource_id: ResourceId, status: str) -> None:
+        """How far along a resource is: one of STATUSES (opening an unopened one sets "opened" by
+        itself, see touchResource)."""
+        if not is_status(status) or resource_id not in self._cards:
+            return
+        try:
+            self._repo.set_resource_status(resource_id, status)
+        except RepositoryError as exc:
+            self.notify.emit(f"Couldn't set the status: {exc}")
+            return
+        self._refresh_resources()
+        self.resourceStatusChanged.emit(resource_id, status)
 
     @Slot(int, str, result=str)
     def deleteResourceWarning(self, resource_id: ResourceId, name: str) -> str:

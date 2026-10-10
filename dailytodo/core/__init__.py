@@ -68,13 +68,17 @@ from .unified_view import FILTERS as UNIFIED_FILTERS, unified_rows
 from .pdf_export import pdf_markdown, safe_file_name
 from .open_questions import ResourceQuestions, group_by_resource, order_for_resource, page_label
 from .resources import (
+    DEFAULT_STATUS,
     SORTS,
+    STATUSES,
+    STATUS_LABELS,
     ResourceCard,
     delete_warning,
     describe,
     filter_and_sort,
     is_inside,
     is_local_path,
+    is_status,
     is_valid_link,
     is_valid_uri,
     recently_used,
@@ -94,6 +98,10 @@ __all__ = [
     "Rect",
     "Resource",
     "ResourceCard",
+    "DEFAULT_STATUS",
+    "STATUSES",
+    "STATUS_LABELS",
+    "is_status",
     "ResourceId",
     "ResourceQuestions",
     "Tag",

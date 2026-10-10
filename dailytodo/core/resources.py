@@ -17,6 +17,22 @@ from .video import is_youtube
 
 ResourceKind = Literal["pdf", "word", "excel", "powerpoint", "file", "web", "video", "link"]
 
+# How far along a resource is. Set by hand (the resource's menu, or the button at the end of a
+# document); the first is the start, and opening an unopened resource makes it "opened" by itself.
+STATUSES = ("unopened", "opened", "in_progress", "finished")
+STATUS_LABELS = {
+    "unopened": "Not opened",
+    "opened": "Opened",
+    "in_progress": "In progress",
+    "finished": "Finished",
+}
+DEFAULT_STATUS = STATUSES[0]
+
+
+def is_status(value: str) -> bool:
+    return value in STATUSES
+
+
 MAX_TITLE = 64  # characters of a name shown on a card (it wraps to 2 lines)
 
 _LOCAL_PATH = re.compile(r"^(?:[A-Za-z]:[\\/]|\\\\|/)")  # C:\..., C:/..., \\server\..., /posix
@@ -49,6 +65,7 @@ class ResourceCard:
     tag_ids: list[TagId]
     created_at: datetime  # for sorting
     last_used_at: datetime  # for sorting
+    status: str = DEFAULT_STATUS  # one of STATUSES
 
 
 def is_inside(path: str, folder: str) -> bool:
@@ -137,16 +154,16 @@ def describe(
         kind = _FILE_KINDS.get(filename[dot:].lower(), "file") if dot > 0 else "file"
         return ResourceCard(
             resource.id, name, uri, kind, title, True, not exists(uri), tags,
-            resource.created_at, resource.last_used_at,
+            resource.created_at, resource.last_used_at, resource.status,
         )
     if urlparse(uri).scheme.lower() in ("http", "https"):
         return ResourceCard(
             resource.id, name, uri, "video" if is_youtube(uri) else "web", title, False, False, tags,
-            resource.created_at, resource.last_used_at,
+            resource.created_at, resource.last_used_at, resource.status,
         )
     return ResourceCard(
         resource.id, name, uri, "link", title, False, False, tags,
-        resource.created_at, resource.last_used_at,
+        resource.created_at, resource.last_used_at, resource.status,
     )
 
 # ---------------------------------------------------------------- library: filter and sort
