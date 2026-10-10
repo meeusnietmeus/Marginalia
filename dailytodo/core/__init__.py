@@ -26,6 +26,8 @@ from .knowledge_graph import (
     build_graph,
     find_clusters,
     layout_cluster,
+    node_label,
+    node_width,
 )
 from .capture import Capture, parse_capture, same_page
 from .video import (
@@ -157,6 +159,8 @@ __all__ = [
     "build_graph",
     "find_clusters",
     "layout_cluster",
+    "node_label",
+    "node_width",
     "referenced_resource_ids",
     "split_links",
     "with_scheme",

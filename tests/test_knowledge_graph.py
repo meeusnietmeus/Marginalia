@@ -196,3 +196,25 @@ class ModelTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NameLimitTest(unittest.TestCase):
+    def test_names_are_cut_after_eighty_characters(self):
+        from dailytodo.core import node_label
+
+        self.assertEqual(node_label("x" * 80), "x" * 80)
+        self.assertEqual(node_label("x" * 81), "x" * 80 + "…")
+
+    def test_pills_grow_with_the_name_and_the_layout_leaves_room(self):
+        from dailytodo.core.knowledge_graph import NODE_W, node_width
+
+        self.assertEqual(node_width("short"), NODE_W)
+        self.assertGreater(node_width("y" * 80), 3 * NODE_W)
+        self.assertEqual(node_width("y" * 200), node_width("y" * 81))  # both end in the ellipsis
+        long_name = "z" * 80
+        graph = build_graph([GraphResource(1, long_name, "pdf"), GraphResource(2, "b", "pdf")], [(1, 2)])
+        first, second = graph.nodes
+        self.assertEqual((first.label, first.width), (long_name, node_width(long_name)))
+        gap = abs(first.x - second.x) - (first.width + second.width) / 2
+        near_vertical = abs(first.y - second.y) >= 30
+        self.assertTrue(gap >= 0 or near_vertical, "pills overlap")

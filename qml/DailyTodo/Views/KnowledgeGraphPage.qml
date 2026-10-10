@@ -26,7 +26,6 @@ Item {
     property real panX: 0
     property real panY: 0
     readonly property real minZoom: 0.08
-    readonly property real nodeW: 185                 // a resource's pill, in layout units (core NODE_W)
     readonly property real maxZoom: 2.5
 
     property int focusTag: -2                    // the tag picked in the legend (-2: none, -1: untagged)
@@ -253,7 +252,7 @@ Item {
                 const ctx = getContext("2d")
                 ctx.reset()
                 const z = page.zoom
-                const hw = page.nodeW / 2 * z, hh = 15 * z
+                const hh = 15 * z
                 const size = Math.max(4, 8 * Math.min(1, z + 0.2))
                 for (const e of page.graph.edges) {
                     const a = page.nodeById[e.a], b = page.nodeById[e.b]
@@ -270,7 +269,8 @@ Item {
                     const bx = b.x * z + page.panX, by = b.y * z + page.panY
                     const dx = bx - ax, dy = by - ay
                     if (dx === 0 && dy === 0) continue
-                    const ta = leave(dx, dy, hw, hh), tb = leave(-dx, -dy, hw, hh)
+                    // each pill is as wide as its name needs (a.width, in layout units)
+                    const ta = leave(dx, dy, a.width / 2 * z, hh), tb = leave(-dx, -dy, b.width / 2 * z, hh)
                     if (ta + tb >= 1) continue                 // the pills touch: nothing to draw
                     const sx = ax + dx * ta, sy = ay + dy * ta
                     const ex = bx - dx * tb, ey = by - dy * tb
@@ -296,7 +296,7 @@ Item {
             visible: n !== null && n !== undefined
             x: n ? n.x * page.zoom + page.panX - width / 2 : 0
             y: n ? n.y * page.zoom + page.panY - height / 2 + 3 : 0
-            width: page.nodeW * page.zoom
+            width: n ? n.width * page.zoom : 0
             height: 30 * page.zoom
             radius: height / 2
             blur: 18
@@ -321,7 +321,7 @@ Item {
                                                && modelData.tags.indexOf(page.focusName) >= 0)
                 readonly property bool small: page.zoom < 0.42
 
-                width: page.nodeW * page.zoom
+                width: modelData.width * page.zoom
                 height: 30 * page.zoom
                 x: modelData.x * page.zoom + page.panX - width / 2
                 y: modelData.y * page.zoom + page.panY - height / 2
@@ -374,7 +374,7 @@ Item {
                     anchors.leftMargin: 31 * page.zoom
                     anchors.rightMargin: 10 * page.zoom
                     verticalAlignment: Text.AlignVCenter
-                    text: node.modelData.name
+                    text: node.modelData.label        // at most 80 characters, then an ellipsis
                     elide: Text.ElideRight
                     font.pixelSize: Math.max(7, 14 * page.zoom)
                     font.weight: Font.DemiBold
