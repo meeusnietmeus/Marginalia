@@ -35,6 +35,7 @@ EntryCard 1.0 EntryCard.qml
 PdfViewerPage 1.0 PdfViewerPage.qml
 UnifiedNotesPage 1.0 UnifiedNotesPage.qml
 StatusDot 1.0 StatusDot.qml
+SearchPage 1.0 SearchPage.qml
 StatusMenuItem 1.0 StatusMenuItem.qml
 NoteTextArea 1.0 NoteTextArea.qml
 ReferencePicker 1.0 ReferencePicker.qml
