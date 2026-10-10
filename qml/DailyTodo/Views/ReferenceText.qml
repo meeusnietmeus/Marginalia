@@ -8,7 +8,7 @@ import DailyTodo.Style
 //   * a tag is normal-coloured text on a slightly lighter background, like a chip (click to see
 //     it in the Knowledge graph)
 //   * a reference to something that was deleted stays as dim, struck-through text
-// **bold**, *italic*, "- " bullets and $formulas$ are drawn from the raw text (core/markdown.py).
+// **bold**, *italic*, "- " bullets, `code` and $formulas$ are drawn from the raw text (core/markdown.py).
 // A web address, written bare or as [name](address), is a link too (accent coloured).
 // A read-only TextEdit rather than a Text, because it can tell where each character is drawn
 // (positionToRectangle). Qt Quick cannot draw a dotted underline, so the links' own underline is
@@ -44,7 +44,7 @@ TextEdit {
     function pieceLength(p) {
         if (p.type === "math")
             return controller && controller.formulaImage(p.text, "" + baseColor, font.pixelSize).url ? 1 : p.text.length + 2
-        return p.text.length + (p.type === "tag" && !p.missing ? 2 : 0)
+        return p.text.length + ((p.type === "tag" && !p.missing) || p.type === "code" ? 2 : 0)
     }
 
     function html() {
@@ -61,6 +61,9 @@ TextEdit {
             else if (p.type === "tag" && !p.missing)
                 out += "<a href=\"tag:" + p.id + "\"><span style=\"background-color:" + Theme.hover
                      + ";color:" + baseColor + ";\">&nbsp;" + esc(p.text) + "&nbsp;</span></a>"
+            else if (p.type === "code")
+                out += "<span style=\"font-family:Consolas,monospace;background-color:" + Theme.hover
+                     + ";color:" + baseColor + ";\">&nbsp;" + esc(p.text) + "&nbsp;</span>"
             else if (p.type === "math")
                 out += formula(p.text)
             else if (p.missing)

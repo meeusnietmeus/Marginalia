@@ -1,4 +1,4 @@
-"""Light markdown for todo text: ``- bullet``, ``*italic*``, ``**bold**`` and ``$formula$``.
+"""Light markdown for todo text: ``- bullet``, ``*italic*``, ``**bold**``, ``$formula$`` and ``code``.
 
 The stored text keeps the raw markers; this only decides how to *show* it. It works on the pieces
 ``references.segments`` produced, so bold and italic can wrap a link or a reference too. The markers
@@ -16,6 +16,8 @@ _BULLET = re.compile(r"^([ \t]*)-( )", re.MULTILINE)
 _BOLD = re.compile(r"\*\*(?=\S)(.+?)(?<=\S)\*\*")
 # $...$ opens before a non-space, closes after one and not before a digit: "$5 and $6" is prices
 _MATH = re.compile(r"\$(?=[^\s$])([^$\n" + _PLACEHOLDER + r"]+?)(?<=[^\s$])\$(?!\d)")
+# `code`: anything but a backtick, on one line
+_CODE = re.compile(r"`([^`\n" + _PLACEHOLDER + r"]+)`")
 _ITALIC = re.compile(r"\*(?=[^\s*])(.+?)(?<=[^\s*])\*")
 BULLET_CHAR = "•"
 
@@ -34,11 +36,17 @@ def style_pieces(pieces: list[dict]) -> list[dict]:
             owner.append((index, 0))
     text = "".join(flat)
 
-    formulas = {m.start(): m for m in _MATH.finditer(text)}  # start -> match, inside text pieces only
-    in_formula = [False] * len(text)
-    for match in formulas.values():
-        for i in range(match.start(), match.end()):
-            in_formula[i] = True
+    # code and formulas are taken out first and left alone by everything else: start -> (type, text)
+    atoms: dict[int, tuple[str, str]] = {}
+    in_atom = [False] * len(text)
+    scan = text
+    for kind, pattern in (("code", _CODE), ("math", _MATH)):
+        for match in pattern.finditer(scan):
+            atoms[match.start()] = (kind, match.group(1))
+            for i in range(match.start(), match.end()):
+                in_atom[i] = True
+        # what is taken can't be taken again (`$x$` inside code stays code)
+        scan = "".join(_PLACEHOLDER if taken else c for c, taken in zip(text, in_atom))
 
     removed = [False] * len(text)
     bold = [False] * len(text)
@@ -51,16 +59,16 @@ def style_pieces(pieces: list[dict]) -> list[dict]:
     line_start = 0
     for line in text.split("\n"):
         line_range = list(range(line_start, line_start + len(line)))
-        _mark(text, [i for i in line_range if not in_formula[i]], _BOLD, 2, removed, bold)
+        _mark(text, [i for i in line_range if not in_atom[i]], _BOLD, 2, removed, bold)
         # bold's markers are gone, so they can't pair up as italic ones
-        _mark(text, [i for i in line_range if not removed[i] and not in_formula[i]], _ITALIC, 1, removed, italic)
+        _mark(text, [i for i in line_range if not removed[i] and not in_atom[i]], _ITALIC, 1, removed, italic)
         line_start += len(line) + 1
 
     out: list[dict] = []
     for i, char in enumerate(flat):
-        if in_formula[i]:
-            if i in formulas:  # the formula is one piece; its other characters are skipped
-                out.append({"type": "math", "text": formulas[i].group(1), "id": -1, "missing": False,
+        if in_atom[i]:
+            if i in atoms:  # code or a formula is one piece; its other characters are skipped
+                out.append({"type": atoms[i][0], "text": atoms[i][1], "id": -1, "missing": False,
                             "url": "", "bold": bold[i], "italic": italic[i]})
             continue
         if removed[i]:
