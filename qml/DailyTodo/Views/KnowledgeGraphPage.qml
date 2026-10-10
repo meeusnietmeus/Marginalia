@@ -31,7 +31,20 @@ Item {
     property int focusTag: -2                    // the tag picked in the legend (-2: none, -1: untagged)
     property int hoverId: -1                     // the resource under the pointer
     property int foundId: -1                     // the resource just found with the search bar
+    property string focusStatus: ""             // a status picked in the legend ("": all)
     property bool allLinks: true                 // false: a resource's links only show on hover
+
+    // how many resources have each status, and what the statuses are called
+    readonly property var statusList: controller.statuses()
+    readonly property var statusCounts: {
+        const counts = {}
+        for (const n of graph.nodes) counts[n.status] = (counts[n.status] || 0) + 1
+        return counts
+    }
+    function statusLabel(key) {
+        for (const s of statusList) if (s.key === key) return s.label
+        return key
+    }
 
     function tint(color) { return color < 0 ? Theme.textMuted : Theme.areaColor(color) }
 
@@ -315,7 +328,9 @@ Item {
                 readonly property bool neighbour: !hovered && page.hoverSet[modelData.id] === true
                 readonly property bool found: page.foundId === modelData.id
                 // a tag picked in the legend: what has it stands out, the rest steps back a little
-                readonly property bool picked: page.focusTag === -2
+                readonly property bool statusPicked: page.focusStatus === "" || modelData.status === page.focusStatus
+                readonly property bool picked: statusPicked && tagPicked
+                readonly property bool tagPicked: page.focusTag === -2
                     || (page.focusTag === -1 ? modelData.tags.length === 0
                                              : page.focusTag >= 0 && page.focusName !== ""
                                                && modelData.tags.indexOf(page.focusName) >= 0)
@@ -372,7 +387,7 @@ Item {
                     visible: !node.small
                     anchors.fill: parent
                     anchors.leftMargin: 31 * page.zoom
-                    anchors.rightMargin: 10 * page.zoom
+                    anchors.rightMargin: 27 * page.zoom           // room for the status
                     verticalAlignment: Text.AlignVCenter
                     text: node.modelData.label        // at most 80 characters, then an ellipsis
                     elide: Text.ElideRight
@@ -380,6 +395,14 @@ Item {
                     font.weight: Font.DemiBold
                     font.strikeout: node.modelData.missing
                     color: node.modelData.missing ? Theme.textFaint : Theme.text
+                }
+                StatusDot {                              // how far along it is
+                    visible: !node.small
+                    anchors.right: parent.right
+                    anchors.rightMargin: 10 * page.zoom
+                    anchors.verticalCenter: parent.verticalCenter
+                    status: node.modelData.status
+                    size: 12 * page.zoom
                 }
                 HoverHandler {
                     cursorShape: Qt.PointingHandCursor
@@ -403,7 +426,8 @@ Item {
             parent: viewport
             x: hovered ? hovered.x * page.zoom + page.panX - width / 2 : 0
             y: hovered ? hovered.y * page.zoom + page.panY + 22 * page.zoom : 0
-            text: hovered ? hovered.name + (hovered.tags.length > 0 ? "\n" + hovered.tags.join(", ") : "")
+            text: hovered ? hovered.name + "\n" + page.statusLabel(hovered.status)
+                            + (hovered.tags.length > 0 ? "\n" + hovered.tags.join(", ") : "")
                             + (hovered.degree > 0 ? "\n" + hovered.degree + (hovered.degree === 1 ? " link" : " links") : "")
                           : ""
             shown: hovered !== null && hovered !== undefined
@@ -568,6 +592,53 @@ Item {
                                 page.focusTag = tagRow.modelData.tag
                                 page.goToRegion(tagRow.modelData.tag)
                             }
+                        }
+                    }
+                }
+            }
+            // how far along the resources are: click one to show only those
+            CapsLabel {
+                visible: page.graph.nodes.length > 0
+                text: "Progress"
+                color: Theme.textFaint
+                font.letterSpacing: 0.8
+            }
+            Flow {
+                visible: page.graph.nodes.length > 0
+                Layout.fillWidth: true
+                spacing: 6
+                Repeater {
+                    model: page.statusList
+                    Item {
+                        id: statusChip
+                        required property var modelData
+                        readonly property bool selected: page.focusStatus === modelData.key
+                        readonly property int count: page.statusCounts[modelData.key] || 0
+                        width: chipRow.implicitWidth + 18
+                        height: 26
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: height / 2
+                            color: statusChip.selected ? Qt.alpha(Theme.statusColor(modelData.key), 0.18)
+                                 : chipHover.hovered ? Qt.alpha(Theme.text, 0.07) : "transparent"
+                            border.color: statusChip.selected ? Qt.alpha(Theme.statusColor(modelData.key), 0.55)
+                                                              : Theme.hairline
+                        }
+                        Row {
+                            id: chipRow
+                            anchors.centerIn: parent
+                            spacing: 6
+                            StatusDot { anchors.verticalCenter: parent.verticalCenter; status: modelData.key; size: 11 }
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: modelData.label + "  " + statusChip.count
+                                font.pixelSize: 11
+                                color: statusChip.count > 0 ? Theme.text : Theme.textFaint
+                            }
+                        }
+                        HoverHandler { id: chipHover; cursorShape: Qt.PointingHandCursor }
+                        ClickHandler {
+                            onTapped: page.focusStatus = statusChip.selected ? "" : statusChip.modelData.key
                         }
                     }
                 }
