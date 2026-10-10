@@ -18,6 +18,7 @@ from PySide6.QtQuick import QQuickTextDocument
 
 from ..core import (
     SORTS,
+    UNIFIED_FILTERS,
     DayPlanner,
     ResourceCard,
     ResourceId,
@@ -57,6 +58,7 @@ from ..core import (
     read_annotations,
     recently_used,
     time_ago,
+    unified_rows,
 )
 from ..powerpoint import ExportResult, convert_to_pptx, export_pdf
 from ..thumbnails import cached_thumbnail, fetch_thumbnail
@@ -1367,6 +1369,23 @@ class TodoController(QObject):
             self.notify.emit(f"Export failed: {exc}")
             return
         self.notify.emit(f"Exported to {dest}")
+
+    @Slot(int, str, result="QVariantMap")
+    def unifiedNotes(self, resource_id: ResourceId, mode: str = "all") -> dict:
+        """Everything written about a PDF / presentation as one ordered list (see
+        core.unified_rows) for its unified view; ``mode`` is all | notes | questions | unanswered."""
+        try:
+            notes = self._repo.list_all_notes(resource_id)
+            highlights = self._repo.list_highlights(resource_id)
+        except RepositoryError as exc:
+            self.notify.emit(f"Couldn't load the notes: {exc}")
+            return {"rows": [], "notes": 0, "questions": 0, "unanswered": 0}
+        card = self._cards.get(resource_id)
+        return unified_rows(
+            notes, highlights, plain=lambda body: to_edit_text(body, self._name_of),
+            mode=mode if mode in UNIFIED_FILTERS else "all",
+            slides=card is not None and card.kind == "powerpoint",
+        )
 
     @Slot()
     def checkNewDay(self) -> None:

@@ -52,7 +52,8 @@ ApplicationWindow {
     property string settingsFolder: ""        // the workspace settings dialog's view of the setting
 
     // Open resource tabs, after the fixed pages (Overview, Open questions, Knowledge graph).
-    // kind: "pdf" (a PDF, or with hasDocument false the notes tab of any other resource) | "video".
+    // kind: "pdf" (a PDF, or with hasDocument false the notes tab of any other resource) | "video" |
+    // "unified" (every note and question of a PDF on one page; a second tab of the same resource).
     ListModel { id: tabs }
 
     // Opens a resource in its own tab, or switches to the tab it is already open in. A PDF shows
@@ -62,10 +63,12 @@ ApplicationWindow {
     function openPdf(resourceId, title, uri, page) { openResourceTab(resourceId, title, uri, page, true, "pdf") }
     function openNotes(resourceId, title, uri, page) { openResourceTab(resourceId, title, uri, page, false, "pdf") }
     function openVideo(resourceId, title, uri, page) { openResourceTab(resourceId, title, uri, page, false, "video") }
+    function openUnified(resourceId, title) { openResourceTab(resourceId, "Notes: " + title, "", 0, true, "unified") }
     function openResourceTab(resourceId, title, uri, page, hasDocument, kind) {
         const startPage = page || 0
         for (let i = 0; i < tabs.count; i++) {
-            if (tabs.get(i).resourceId === resourceId) {
+            // a resource has its document tab and may have a unified view next to it
+            if (tabs.get(i).resourceId === resourceId && (tabs.get(i).kind === "unified") === (kind === "unified")) {
                 currentView = "tab"
                 currentTab = i
                 const loader = tabRepeater.itemAt(i)
@@ -92,7 +95,7 @@ ApplicationWindow {
     // open its note / question box at that moment, with the cursor in it.
     function openCaptureBox(resourceId, kind, seconds) {
         for (let i = 0; i < tabs.count; i++) {
-            if (tabs.get(i).resourceId !== resourceId) continue
+            if (tabs.get(i).resourceId !== resourceId || tabs.get(i).kind === "unified") continue
             const loader = tabRepeater.itemAt(i)
             if (loader && loader.item) {
                 const page = loader.item
@@ -236,9 +239,13 @@ ApplicationWindow {
                 required property int resourceId
                 required property int startPage
                 required property bool hasDocument
-                sourceComponent: kind === "video" ? videoTab : pdfViewerTab
+                sourceComponent: kind === "video" ? videoTab : kind === "unified" ? unifiedTab : pdfViewerTab
                 onLoaded: {
-                    item.title = title
+                    item.title = kind === "unified" ? title.replace(/^Notes: /, "") : title
+                    if (kind === "unified") {
+                        item.resourceId = resourceId
+                        return
+                    }
                     if (kind === "pdf")
                         item.hasDocument = hasDocument      // first: the uri of a web link is no PDF to load
                     item.uri = uri
@@ -251,7 +258,16 @@ ApplicationWindow {
 
     Component {
         id: pdfViewerTab
-        PdfViewerPage { controller: root.controller; actions: resourceActions }
+        PdfViewerPage {
+            controller: root.controller
+            actions: resourceActions
+            onUnifiedRequested: root.openUnified(resourceId, title)
+        }
+    }
+
+    Component {
+        id: unifiedTab
+        UnifiedNotesPage { controller: root.controller; actions: resourceActions }
     }
 
     Component {
@@ -300,7 +316,8 @@ ApplicationWindow {
         onEdited: (resourceId, name) => {
             for (let i = 0; i < tabs.count; i++) {
                 if (tabs.get(i).resourceId !== resourceId) continue
-                tabs.setProperty(i, "title", name)
+                const shown = tabs.get(i).kind === "unified" ? "Notes: " + name : name
+                tabs.setProperty(i, "title", shown)
                 const loader = tabRepeater.itemAt(i)
                 if (loader && loader.item) loader.item.title = name
             }

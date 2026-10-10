@@ -20,6 +20,8 @@ Item {
     required property var controller
     required property var actions            // the resource menu and dialogs (ResourceActions)
 
+    signal unifiedRequested()                // "Unified page view": every note on one page, in a tab of its own
+
     // Set by the tab that hosts this page.
     property string title
     property string uri                      // absolute path of the PDF
@@ -712,10 +714,9 @@ Item {
                     x: 0
                     y: -height - 8
                     AppMenuItem {
-                        enabled: false
-                        text: "Unified page view (coming soon)"
+                        text: "Unified page view"
                         iconSource: Theme.iconGrid
-                        tint: Theme.textFaint
+                        onTriggered: view.unifiedRequested()
                     }
                     AppMenuItem {
                         visible: view.isPresentation
