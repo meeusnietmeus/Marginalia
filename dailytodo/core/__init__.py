@@ -26,6 +26,8 @@ from .knowledge_graph import (
     build_graph,
     find_clusters,
     layout_cluster,
+    node_label,
+    node_width,
 )
 from .capture import Capture, parse_capture, same_page
 from .video import (
@@ -49,11 +51,14 @@ from .presentations import (
     read_annotations,
 )
 from .labels import (
+    COLOR_COUNT,
     LabelRow,
     ancestors,
     descendants,
     expand_filter,
+    free_color,
     label_rows,
+    tag_colors,
     valid_parents,
     with_ancestors,
 )
@@ -63,13 +68,17 @@ from .unified_view import FILTERS as UNIFIED_FILTERS, unified_rows
 from .pdf_export import pdf_markdown, safe_file_name
 from .open_questions import ResourceQuestions, group_by_resource, order_for_resource, page_label
 from .resources import (
+    DEFAULT_STATUS,
     SORTS,
+    STATUSES,
+    STATUS_LABELS,
     ResourceCard,
     delete_warning,
     describe,
     filter_and_sort,
     is_inside,
     is_local_path,
+    is_status,
     is_valid_link,
     is_valid_uri,
     recently_used,
@@ -89,6 +98,10 @@ __all__ = [
     "Rect",
     "Resource",
     "ResourceCard",
+    "DEFAULT_STATUS",
+    "STATUSES",
+    "STATUS_LABELS",
+    "is_status",
     "ResourceId",
     "ResourceQuestions",
     "Tag",
@@ -154,6 +167,8 @@ __all__ = [
     "build_graph",
     "find_clusters",
     "layout_cluster",
+    "node_label",
+    "node_width",
     "referenced_resource_ids",
     "split_links",
     "with_scheme",

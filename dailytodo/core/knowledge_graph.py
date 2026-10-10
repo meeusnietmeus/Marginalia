@@ -8,7 +8,8 @@ each one. No Qt and no storage in here, so it is plain unit-testable logic.
 * Inside a region, resources that link to each other are laid out together (a force-directed
   layout, so strongly linked resources end up close); the ones without a link in the region sit in
   a tidy grid. Links between regions are drawn as well, they just aren't used for placing.
-* A tag family shares a colour: a sub-tag has its top tag's.
+* A tag family shares a colour: a top tag has the one it was given (or one by position), a sub-tag
+  has its top tag's.
 * Finding linked groups walks the links once: every link is looked at a single time and every
   resource is queued a single time, however many cycles there are.
 """
@@ -19,7 +20,10 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Iterable, Mapping, Sequence
 
-NODE_W = 185.0  # what the UI draws per resource, in layout units
+NODE_W = 185.0  # the narrowest a resource is drawn, in layout units: names grow it, up to MAX_NAME_CHARS
+MAX_NAME_CHARS = 80  # a longer name is cut here and ends in an ellipsis
+CHAR_W = 7.4  # about how wide a character of a name is drawn
+NODE_PAD = 46.0  # what a resource's pill needs besides its name: the kind's tile and the margins
 NODE_H = 30.0
 LINK_LENGTH = 140.0  # the layout's preferred distance between two linked resources
 GROUP_GAP = 36.0  # between the blocks inside a region
@@ -34,6 +38,7 @@ class GraphTag:
     id: int
     name: str
     parent: int | None = None
+    color: int | None = None  # a top-level tag's own colour; None: by position
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,6 +51,7 @@ class GraphResource:
     missing: bool = False
     tags: tuple[str, ...] = ()  # tag names, with the ones above them (for the legend's filter)
     own: tuple[int, ...] = ()  # the ids of the tags it was given itself
+    status: str = "unopened"  # how far along it is (see resources.STATUSES)
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +66,9 @@ class GraphNode:
     degree: int
     x: float  # centre, in layout units
     y: float
+    label: str = ""  # the name as drawn: at most MAX_NAME_CHARS characters
+    status: str = "unopened"
+    width: float = NODE_W  # how wide its pill is
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,19 +165,31 @@ def find_clusters(
     return clusters, edges
 
 
+def node_label(name: str) -> str:
+    """A resource's name as the graph draws it: up to MAX_NAME_CHARS characters, then an ellipsis."""
+    return name if len(name) <= MAX_NAME_CHARS else name[:MAX_NAME_CHARS].rstrip() + "…"
+
+
+def node_width(name: str) -> float:
+    """How wide a resource's pill is, in layout units: room for its label, never below NODE_W."""
+    return max(NODE_W, NODE_PAD + CHAR_W * len(node_label(name)))
+
+
 # -------------------------------------------------------------------- layout
 def _iterations(n: int) -> int:
     return 150 if n <= 40 else 90 if n <= 120 else 40 if n <= 300 else 15
 
 
 def layout_cluster(
-    members: Sequence[int], edges: Iterable[tuple[int, int]]
+    members: Sequence[int], edges: Iterable[tuple[int, int]], widths: Mapping[int, float] | None = None
 ) -> dict[int, tuple[float, float]]:
     """Positions for one linked group (top-left at 0, 0): linked resources attract, all repel
-    (Fruchterman-Reingold). Deterministic: the same group always looks the same."""
+    (Fruchterman-Reingold). Deterministic: the same group always looks the same. ``widths`` says
+    how wide each resource is (NODE_W when it isn't there)."""
+    widths = widths or {}
     n = len(members)
     if n == 1:
-        return {members[0]: (NODE_W / 2, NODE_H / 2)}
+        return {members[0]: (widths.get(members[0], NODE_W) / 2, NODE_H / 2)}
     side = max(260.0, LINK_LENGTH * 1.15 * math.sqrt(n))
     order = sorted(members)
     index = {m: i for i, m in enumerate(order)}
@@ -207,16 +228,17 @@ def layout_cluster(
             px[i] += dx[i] / length * step
             py[i] += dy[i] / length * step
         heat -= cooling
-    _settle(px, py)
-    left, top = min(px), min(py)
-    return {m: (px[index[m]] - left + NODE_W / 2, py[index[m]] - top + NODE_H / 2) for m in order}
+    wide = [widths.get(m, NODE_W) for m in order]
+    _settle(px, py, wide)
+    left, top = min(px[i] - wide[i] / 2 for i in range(n)), min(py)
+    return {m: (px[index[m]] - left, py[index[m]] - top + NODE_H / 2) for m in order}
 
 
 GAP_X = 22.0  # the least room between two resources side by side
 GAP_Y = 16.0  # ... and one above the other
 
 
-def _settle(px: list[float], py: list[float]) -> None:
+def _settle(px: list[float], py: list[float], wide: list[float]) -> None:
     """The force layout spaces resources as if they were round, but they are wide, low pills:
     squash it vertically, then push apart whatever overlaps (along the axis that needs the least
     moving), so a group stays compact and readable."""
@@ -228,7 +250,7 @@ def _settle(px: list[float], py: list[float]) -> None:
         for i in range(n):
             for j in range(i + 1, n):
                 dx, dy = px[j] - px[i], py[j] - py[i]
-                over_x = NODE_W + GAP_X - abs(dx)
+                over_x = (wide[i] + wide[j]) / 2 + GAP_X - abs(dx)
                 over_y = NODE_H + GAP_Y - abs(dy)
                 if over_x <= 0 or over_y <= 0:
                     continue
@@ -245,18 +267,23 @@ def _settle(px: list[float], py: list[float]) -> None:
             break
 
 
-def _grid(members: Sequence[int]) -> dict[int, tuple[float, float]]:
+def _grid(members: Sequence[int], widths: Mapping[int, float] | None = None) -> dict[int, tuple[float, float]]:
+    widths = widths or {}
     columns = max(1, math.ceil(math.sqrt(len(members) * 1.2)))
-    cell_w, cell_h = NODE_W + 16, NODE_H + 14
+    cell_w = max(widths.get(m, NODE_W) for m in members) + 16  # every cell as wide as the widest name
+    cell_h = NODE_H + 14
     return {
-        m: (NODE_W / 2 + (i % columns) * cell_w, NODE_H / 2 + (i // columns) * cell_h)
+        m: ((cell_w - 16) / 2 + (i % columns) * cell_w, NODE_H / 2 + (i // columns) * cell_h)
         for i, m in enumerate(members)
     }
 
 
-def _extent(positions: Mapping[int, tuple[float, float]]) -> tuple[float, float]:
+def _extent(
+    positions: Mapping[int, tuple[float, float]], widths: Mapping[int, float] | None = None
+) -> tuple[float, float]:
+    widths = widths or {}
     return (
-        max(x for x, _ in positions.values()) + NODE_W / 2,
+        max(x + widths.get(m, NODE_W) / 2 for m, (x, _) in positions.items()),
         max(y for _, y in positions.values()) + NODE_H / 2,
     )
 
@@ -338,6 +365,7 @@ def build_graph(
 ) -> KnowledgeGraph:
     """The whole picture: every resource in the region of its tag, regions nested like the tags."""
     by_id = {r.id: r for r in resources}
+    widths = {r.id: node_width(r.name) for r in resources}
     _, edges = find_clusters(by_id, links)
     degree: dict[int, int] = {}
     for edge in edges.values():
@@ -350,7 +378,11 @@ def build_graph(
     for t in order:  # tree order: a parent is always seen before its children
         top_of[t.id] = top_of[t.parent] if depth[t.id] > 0 and t.parent in top_of else t.id
     tops = [t.id for t in order if depth[t.id] == 0]
-    color_of = {tag_id: tops.index(top_of[tag_id]) for tag_id in tag_by_id}
+    color_of = {  # a family shares its top tag's colour: the one it was given, else its position
+        tag_id: (tag_by_id[top_of[tag_id]].color if tag_by_id[top_of[tag_id]].color is not None
+                 else tops.index(top_of[tag_id]))
+        for tag_id in tag_by_id
+    }
 
     # every resource's region: its most specific own tag (the first by name between equals)
     home: dict[int, int] = {}
@@ -376,12 +408,12 @@ def build_graph(
         for group in groups:
             if len(group) > 1:
                 group_set = set(group)
-                positions = layout_cluster(group, [k for k in own_links if k[0] in group_set])
-                blocks.append((*_extent(positions), positions))
+                positions = layout_cluster(group, [k for k in own_links if k[0] in group_set], widths)
+                blocks.append((*_extent(positions, widths), positions))
         loose = sorted((g[0] for g in groups if len(g) == 1), key=lambda i: (by_id[i].name.casefold(), i))
         if loose:
-            positions = _grid(loose)
-            blocks.append((*_extent(positions), positions))
+            positions = _grid(loose, widths)
+            blocks.append((*_extent(positions, widths), positions))
         return blocks
 
     def block_of(tag: int) -> _Block:
@@ -426,6 +458,7 @@ def build_graph(
             nodes.append(GraphNode(
                 node, r.name, r.kind, r.missing, tuple(sorted(r.tags, key=str.casefold)), home[node],
                 color_of.get(home[node], -1), degree.get(node, 0), bx + nx, by + ny,
+                node_label(r.name), r.status, widths[node],
             ))
 
     # the legend counts every resource that has a tag (or one below it), wherever it is drawn

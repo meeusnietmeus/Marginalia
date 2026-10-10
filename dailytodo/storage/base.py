@@ -76,15 +76,26 @@ class TodoRepository(ABC):
 
     @abstractmethod
     def touch_resource(self, resource_id: ResourceId) -> None:
-        """Record that the resource was just opened (sets ``last_used_at``)."""
+        """Record that the resource was just opened (sets ``last_used_at``; an "unopened"
+        resource becomes "opened", any other status stays)."""
+
+    @abstractmethod
+    def set_resource_status(self, resource_id: ResourceId, status: str) -> None:
+        """Set how far along a resource is (one of ``core.STATUSES``)."""
 
     @abstractmethod
     def list_tags(self, workspace_id: WorkspaceId) -> list[Tag]:
         """The tags of one workspace, sorted by name."""
 
     @abstractmethod
-    def create_tag(self, workspace_id: WorkspaceId, name: str, parent_id: TagId | None = None) -> Tag:
+    def create_tag(
+        self, workspace_id: WorkspaceId, name: str, parent_id: TagId | None = None, color: int | None = None
+    ) -> Tag:
         """Raises RepositoryError if the workspace already has a tag with that name."""
+
+    @abstractmethod
+    def set_tag_color(self, tag_id: TagId, color: int | None) -> None:
+        """The colour (a palette index) of a top-level tag; None: automatic."""
 
     @abstractmethod
     def rename_tag(self, tag_id: TagId, name: str) -> None:

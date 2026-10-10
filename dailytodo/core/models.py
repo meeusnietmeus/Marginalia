@@ -34,6 +34,9 @@ class Tag:
     id: TagId
     name: str
     parent_id: TagId | None = None  # the tag this is a sub-tag of
+    # The colour of a top-level tag (an index into the palette). None: automatic, by position. A
+    # sub-tag never has its own: it uses its top tag's.
+    color: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,3 +92,4 @@ class Resource:
     uri: str
     created_at: datetime  # UTC
     last_used_at: datetime  # UTC; starts at created_at, bumped whenever the resource is opened
+    status: str = "unopened"  # how far along it is, one of resources.STATUSES

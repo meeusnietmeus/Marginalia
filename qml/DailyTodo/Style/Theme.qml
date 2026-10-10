@@ -50,6 +50,11 @@ QtObject {
     readonly property var areaColors: ["#e0826a", "#e0b152", "#8cc063", "#4fb3a9", "#5fa8d9",
                                        "#9a8fe0", "#c07bd0", "#e07ba5", "#b59a6a", "#7fc7c7"]
     function areaColor(index) { return index < 0 ? textFaint : areaColors[index % areaColors.length] }
+    // ---- how far along a resource is (see core resources.STATUSES) ----
+    function statusColor(status) {
+        return status === "finished" ? ringDone : status === "in_progress" ? inProgress
+             : status === "opened" ? info : textFaint
+    }
     readonly property color info: "#6fb0e8"            // answers
     readonly property color danger: "#f29b9b"          // pastel red: delete hover
 

@@ -62,6 +62,19 @@ Item {
             iconSource: Theme.iconFolder
             onTriggered: actions.controller.revealInExplorer(menu.info.uri)
         }
+
+        // how far along it is (the graph shows it); "Not opened" turns into "Opened" by itself
+        AppMenuSeparator {}
+        Repeater {
+            model: actions.controller.statuses()
+            StatusMenuItem {
+                required property var modelData
+                status: modelData.key
+                text: modelData.label
+                current: menu.info.status === modelData.key
+                onTriggered: actions.controller.setResourceStatus(menu.info.id, modelData.key)
+            }
+        }
     }
 
     ResourceDialog {

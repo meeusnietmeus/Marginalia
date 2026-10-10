@@ -106,14 +106,14 @@ class KnowledgeGraphModel(QObject):
             return
         tags = self._tags()
         names = {t.id: t.name for t in tags}
-        graph_tags = tuple(GraphTag(t.id, t.name, t.parent_id) for t in tags)
+        graph_tags = tuple(GraphTag(t.id, t.name, t.parent_id, t.color) for t in tags)
         resources = []
         for c in self._cards().values():
             # the legend's filter also finds what is tagged with a sub-tag
             every = {names[t] for t in with_ancestors(tags, c.tag_ids) if t in names}
             resources.append(
                 GraphResource(c.id, c.name, c.kind, c.missing,
-                              tuple(sorted(every, key=str.casefold)), tuple(c.tag_ids))
+                              tuple(sorted(every, key=str.casefold)), tuple(c.tag_ids), c.status)
             )
         signature = (tuple(resources), tuple(links), graph_tags)
         if signature == self._input:

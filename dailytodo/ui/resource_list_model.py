@@ -16,5 +16,6 @@ class ResourceListModel(KeyedListModel[ResourceCard]):
         "isPath": "is_path",
         "missing": "missing",
         "tagIds": "tag_ids",
+        "status": "status",
     }
     KEY = "id"

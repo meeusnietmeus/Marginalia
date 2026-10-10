@@ -426,7 +426,7 @@ SideColumn {
     TagDialog {
         id: tagDialog
         controller: library.controller
-        onCreateClicked: (name, parentId) => library.controller.createTag(name, parentId)
-        onSaveClicked: (id, name, parentId) => library.controller.updateTag(id, name, parentId)
+        onCreateClicked: (name, parentId, color) => library.controller.createTag(name, parentId, color)
+        onSaveClicked: (id, name, parentId, color) => library.controller.updateTag(id, name, parentId, color)
     }
 }

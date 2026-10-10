@@ -16,6 +16,7 @@ from typing import Sequence
 from .models import Tag, TagId
 
 SEPARATOR = " › "
+COLOR_COUNT = 10  # the colours a top-level tag can have (Theme.areaColors)
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,7 +29,7 @@ class LabelRow:
     depth: int  # 0 for a top-level tag
     path: str  # "Maths › Algebra" (just the name for a top-level tag)
     child_count: int  # direct sub-tags
-    family: int = 0  # which top-level tag it is under (0, 1, ...): a tag family shares a colour
+    family: int = 0  # its colour (see tag_colors): a tag and its sub-tags share one
 
 
 def _children(tags: Sequence[Tag]) -> dict[int | None, list[Tag]]:
@@ -41,9 +42,38 @@ def _children(tags: Sequence[Tag]) -> dict[int | None, list[Tag]]:
     return children
 
 
+def tag_colors(tags: Sequence[Tag]) -> dict[TagId, int]:
+    """The colour (palette index) of every tag. A top-level tag has the one it was given, or else
+    its position among the top-level tags; a sub-tag shares its top tag's."""
+    children = _children(tags)
+    colors: dict[TagId, int] = {}
+
+    def paint(tag: Tag, color: int) -> None:
+        if tag.id in colors:  # a loop in damaged data
+            return
+        colors[tag.id] = color
+        for child in children.get(tag.id, []):
+            paint(child, color)
+
+    for number, top in enumerate(children.get(None, [])):
+        paint(top, top.color if top.color is not None else number)
+    return colors
+
+
+def free_color(tags: Sequence[Tag]) -> int:
+    """The first colour no top-level tag has yet (the palette starts over when all are taken)."""
+    colors = tag_colors(tags)
+    used = [colors[t.id] % COLOR_COUNT for t in tags if t.parent_id is None and t.id in colors]
+    for color in range(COLOR_COUNT):
+        if color not in used:
+            return color
+    return min(range(COLOR_COUNT), key=used.count)
+
+
 def label_rows(tags: Sequence[Tag]) -> list[LabelRow]:
     """Every tag, depth first: a tag, then its sub-tags (by name), then the next tag."""
     children = _children(tags)
+    colors = tag_colors(tags)
     rows: list[LabelRow] = []
     seen: set[TagId] = set()
 
@@ -53,7 +83,7 @@ def label_rows(tags: Sequence[Tag]) -> list[LabelRow]:
                 continue
             seen.add(tag.id)
             names = trail + (tag.name,)
-            mine = number if parent is None else family
+            mine = colors.get(tag.id, number)
             rows.append(
                 LabelRow(
                     tag.id, tag.name, -1 if parent is None else parent, depth,
