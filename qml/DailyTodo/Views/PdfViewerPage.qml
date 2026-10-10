@@ -20,6 +20,8 @@ Item {
     required property var controller
     required property var actions            // the resource menu and dialogs (ResourceActions)
 
+    signal unifiedRequested()                // "Unified page view": every note on one page, in a tab of its own
+
     // Set by the tab that hosts this page.
     property string title
     property string uri                      // absolute path of the PDF
@@ -712,10 +714,9 @@ Item {
                     x: 0
                     y: -height - 8
                     AppMenuItem {
-                        enabled: false
-                        text: "Unified page view (coming soon)"
+                        text: "Unified page view"
                         iconSource: Theme.iconGrid
-                        tint: Theme.textFaint
+                        onTriggered: view.unifiedRequested()
                     }
                     AppMenuItem {
                         visible: view.isPresentation
@@ -734,9 +735,40 @@ Item {
         }
     }
     // ----------------------------------------------------------------- centre column
+    // The PDF stands in front of the side columns: a raised panel behind it, throwing a wide
+    // shadow onto them, and drawn above them (the side columns are at z 0).
+    Item {
+        id: stage
+        visible: view.hasDocument
+        z: 1
+        width: view.centerWidth
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+
+        RectangularShadow {
+            anchors.fill: parent
+            blur: 56
+            spread: 4
+            color: Qt.rgba(0, 0, 0, 0.55)
+        }
+        Rectangle {
+            anchors.fill: parent
+            gradient: Gradient {
+                orientation: Gradient.Horizontal
+                GradientStop { position: 0; color: Theme.panelRaised }
+                GradientStop { position: 0.5; color: Theme.panel }
+                GradientStop { position: 1; color: Theme.panelRaised }
+            }
+            // light edges, like the top edge of a Surface
+            Rectangle { width: 1; height: parent.height; color: Theme.hairlineStrong }
+            Rectangle { x: parent.width - 1; width: 1; height: parent.height; color: Theme.hairlineStrong }
+        }
+    }
     ListView {
         id: pages
         visible: view.hasDocument
+        z: 2
         width: view.centerWidth
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.top: parent.top

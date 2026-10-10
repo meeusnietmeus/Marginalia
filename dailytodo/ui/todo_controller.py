@@ -18,6 +18,7 @@ from PySide6.QtQuick import QQuickTextDocument
 
 from ..core import (
     SORTS,
+    UNIFIED_FILTERS,
     DayPlanner,
     ResourceCard,
     ResourceId,
@@ -57,6 +58,7 @@ from ..core import (
     read_annotations,
     recently_used,
     time_ago,
+    unified_rows,
 )
 from ..powerpoint import ExportResult, convert_to_pptx, export_pdf
 from ..math_images import render_formula
@@ -899,8 +901,9 @@ class TodoController(QObject):
 
     @Slot(int)
     def openResourceById(self, resource_id: ResourceId) -> None:
-        """Open a resource like clicking its card in the library: its tab, and a resource the app
-        cannot show (a web page, a Word file...) also in its own program."""
+        """Open a resource like clicking its card in the library: its tab, and a file the app
+        cannot show (a Word file...) also in its own program. A web link only gets its tab: that
+        has an "Open link" button, so the page isn't opened before you ask for it."""
         self._open(resource_id, 0, launch=True)
 
     @Slot(int, int)
@@ -929,7 +932,7 @@ class TodoController(QObject):
             self.videoRequested.emit(card.id, card.name, card.uri, page)
         else:
             self.notesRequested.emit(card.id, card.name, card.uri, page)
-            if launch:
+            if launch and card.is_path:
                 self.openResource(card.uri)
 
     @Slot(int, result=QObject)
@@ -1400,6 +1403,23 @@ class TodoController(QObject):
             self.notify.emit(f"Export failed: {exc}")
             return
         self.notify.emit(f"Exported to {dest}")
+
+    @Slot(int, str, result="QVariantMap")
+    def unifiedNotes(self, resource_id: ResourceId, mode: str = "all") -> dict:
+        """Everything written about a PDF / presentation as one ordered list (see
+        core.unified_rows) for its unified view; ``mode`` is all | notes | questions | unanswered."""
+        try:
+            notes = self._repo.list_all_notes(resource_id)
+            highlights = self._repo.list_highlights(resource_id)
+        except RepositoryError as exc:
+            self.notify.emit(f"Couldn't load the notes: {exc}")
+            return {"rows": [], "notes": 0, "questions": 0, "unanswered": 0}
+        card = self._cards.get(resource_id)
+        return unified_rows(
+            notes, highlights, plain=lambda body: to_edit_text(body, self._name_of),
+            mode=mode if mode in UNIFIED_FILTERS else "all",
+            slides=card is not None and card.kind == "powerpoint",
+        )
 
     @Slot()
     def checkNewDay(self) -> None:
