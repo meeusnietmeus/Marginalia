@@ -50,7 +50,9 @@ from ..core import (
     export_needed,
     format_timestamp,
     is_legacy_format,
+    free_color,
     label_rows,
+    tag_colors,
     valid_parents,
     with_ancestors,
     pdf_file_name,
@@ -421,10 +423,11 @@ class TodoController(QObject):
         """At least one tag of the workspace is a sub-tag."""
         return any(t.parent_id is not None for t in self._all_tags)
 
-    @Slot(str, int, result=int)
-    def createTag(self, name: str, parent_id: int = -1) -> int:
-        """A new tag; ``parent_id`` >= 0 makes it a sub-tag of that tag. Returns its id, or -1 when
-        nothing was made (no name, the name is taken, the database refused)."""
+    @Slot(str, int, int, result=int)
+    def createTag(self, name: str, parent_id: int = -1, color: int = -1) -> int:
+        """A new tag; ``parent_id`` >= 0 makes it a sub-tag of that tag. A top-level tag gets
+        ``color`` (a palette index), or the first colour not taken yet when that is -1. Returns its
+        id, or -1 when nothing was made (no name, the name is taken, the database refused)."""
         name = name.strip()
         if not name:
             return -1
@@ -432,12 +435,23 @@ class TodoController(QObject):
             self.notify.emit(f"A tag named \"{name}\" already exists")
             return -1
         try:
-            tag = self._repo.create_tag(self._workspace_id, name, parent_id if parent_id >= 0 else None)
+            own = (color if color >= 0 else free_color(self._all_tags)) if parent_id < 0 else None
+            tag = self._repo.create_tag(self._workspace_id, name, parent_id if parent_id >= 0 else None, own)
         except RepositoryError as exc:
             self.notify.emit(f"Couldn't create tag: {exc}")
             return -1
         self._refresh_tags()
         return tag.id
+
+    @Slot(result=int)
+    def suggestTagColor(self) -> int:
+        """The colour a new top-level tag starts with: the first one no top-level tag has yet."""
+        return free_color(self._all_tags)
+
+    @Slot(int, result=int)
+    def tagColor(self, tag_id: TagId) -> int:
+        """The colour (palette index) a tag is shown in; a sub-tag's is its top tag's."""
+        return tag_colors(self._all_tags).get(tag_id, 0)
 
     @Slot(int, result="QVariantList")
     def tagChoicesIn(self, workspace_id: WorkspaceId) -> list[dict]:
@@ -465,14 +479,15 @@ class TodoController(QObject):
             if any(t.name.casefold() == name.casefold() for t in self._repo.list_tags(workspace_id)):
                 self.notify.emit(f"A tag named \"{name}\" already exists")
                 return -1
-            return self._repo.create_tag(workspace_id, name).id
+            return self._repo.create_tag(workspace_id, name, None, free_color(self._repo.list_tags(workspace_id))).id
         except RepositoryError as exc:
             self.notify.emit(f"Couldn't create tag: {exc}")
             return -1
 
     @Slot(int, str, int)
-    def updateTag(self, tag_id: TagId, name: str, parent_id: int = -1) -> None:
-        """Rename a tag and put it below ``parent_id`` (-1: top level), as one change."""
+    def updateTag(self, tag_id: TagId, name: str, parent_id: int = -1, color: int = -1) -> None:
+        """Rename a tag, put it below ``parent_id`` (-1: top level) and give a top-level tag
+        ``color`` (-1: leave it), as one change."""
         name = name.strip()
         current = next((t for t in self._all_tags if t.id == tag_id), None)
         if not name or current is None:
@@ -486,6 +501,8 @@ class TodoController(QObject):
                 self._repo.rename_tag(tag_id, name)
             if parent != current.parent_id:
                 self._repo.set_tag_parent(tag_id, parent)
+            if parent is None and color >= 0 and color != current.color:
+                self._repo.set_tag_color(tag_id, color)
         except RepositoryError as exc:
             self.notify.emit(f"Couldn't save tag: {exc}")
             self._refresh_tags()

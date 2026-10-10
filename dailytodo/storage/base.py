@@ -83,8 +83,14 @@ class TodoRepository(ABC):
         """The tags of one workspace, sorted by name."""
 
     @abstractmethod
-    def create_tag(self, workspace_id: WorkspaceId, name: str, parent_id: TagId | None = None) -> Tag:
+    def create_tag(
+        self, workspace_id: WorkspaceId, name: str, parent_id: TagId | None = None, color: int | None = None
+    ) -> Tag:
         """Raises RepositoryError if the workspace already has a tag with that name."""
+
+    @abstractmethod
+    def set_tag_color(self, tag_id: TagId, color: int | None) -> None:
+        """The colour (a palette index) of a top-level tag; None: automatic."""
 
     @abstractmethod
     def rename_tag(self, tag_id: TagId, name: str) -> None:

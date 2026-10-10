@@ -202,3 +202,46 @@ class LabelControllerTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TagColorTest(unittest.TestCase):
+    def test_a_top_tag_has_its_own_colour_or_one_by_position_and_sub_tags_share_it(self):
+        from dailytodo.core import tag_colors
+
+        tags = [Tag(1, "Maths", None, 7), Tag(2, "Algebra", 1), Tag(3, "Linear", 2), Tag(5, "Biology")]
+        colors = tag_colors(tags)
+        self.assertEqual((colors[1], colors[2], colors[3]), (7, 7, 7))
+        self.assertEqual(colors[5], 0)  # Biology is the first top tag by name
+
+    def test_a_new_tag_gets_the_first_colour_nobody_has(self):
+        from dailytodo.core import free_color
+
+        self.assertEqual(free_color([Tag(1, "A", None, 0), Tag(2, "B", None, 2)]), 1)
+        self.assertEqual(free_color([]), 0)
+
+    def test_graph_regions_use_the_chosen_colour(self):
+        from dailytodo.core import GraphResource, GraphTag, build_graph
+
+        graph = build_graph([GraphResource(1, "Doc", "pdf", False, ("Algebra", "Maths"), (2,))], [],
+                            [GraphTag(1, "Maths", None, 6), GraphTag(2, "Algebra", 1)])
+        self.assertEqual(graph.nodes[0].color, 6)
+        self.assertEqual({a.name: a.color for a in graph.areas}, {"Maths": 6, "Algebra": 6})
+
+    def test_the_controller_keeps_colours(self):
+        from datetime import date
+        from PySide6.QtGui import QGuiApplication
+        from dailytodo.storage import SqliteTodoRepository
+        from dailytodo.ui import TodoController
+
+        QGuiApplication.instance() or QGuiApplication([])
+        repo = SqliteTodoRepository(":memory:")
+        ctl = TodoController(repo)
+        a = ctl.createTag("A", -1)
+        b = ctl.createTag("B", -1)
+        self.assertEqual((ctl.tagColor(a), ctl.tagColor(b)), (0, 1))  # each new top tag a free colour
+        child = ctl.createTag("A1", a)
+        ctl.updateTag(a, "A", -1, 5)
+        self.assertEqual((ctl.tagColor(a), ctl.tagColor(child)), (5, 5))
+        self.assertEqual({t.name: t.color for t in repo.list_tags(ctl.currentWorkspaceId)},
+                         {"A": 5, "B": 1, "A1": None})
+        repo.close()

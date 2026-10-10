@@ -42,7 +42,7 @@ Item {
         const row = rows[i]
         if (!row) return
         if (row.create) {
-            const id = workspaceId < 0 ? controller.createTag(row.name, -1)
+            const id = workspaceId < 0 ? controller.createTag(row.name, -1, -1)
                                        : controller.createTagIn(workspaceId, row.name)
             if (id < 0) return
             reload()

@@ -8,7 +8,8 @@ each one. No Qt and no storage in here, so it is plain unit-testable logic.
 * Inside a region, resources that link to each other are laid out together (a force-directed
   layout, so strongly linked resources end up close); the ones without a link in the region sit in
   a tidy grid. Links between regions are drawn as well, they just aren't used for placing.
-* A tag family shares a colour: a sub-tag has its top tag's.
+* A tag family shares a colour: a top tag has the one it was given (or one by position), a sub-tag
+  has its top tag's.
 * Finding linked groups walks the links once: every link is looked at a single time and every
   resource is queued a single time, however many cycles there are.
 """
@@ -34,6 +35,7 @@ class GraphTag:
     id: int
     name: str
     parent: int | None = None
+    color: int | None = None  # a top-level tag's own colour; None: by position
 
 
 @dataclass(frozen=True, slots=True)
@@ -350,7 +352,11 @@ def build_graph(
     for t in order:  # tree order: a parent is always seen before its children
         top_of[t.id] = top_of[t.parent] if depth[t.id] > 0 and t.parent in top_of else t.id
     tops = [t.id for t in order if depth[t.id] == 0]
-    color_of = {tag_id: tops.index(top_of[tag_id]) for tag_id in tag_by_id}
+    color_of = {  # a family shares its top tag's colour: the one it was given, else its position
+        tag_id: (tag_by_id[top_of[tag_id]].color if tag_by_id[top_of[tag_id]].color is not None
+                 else tops.index(top_of[tag_id]))
+        for tag_id in tag_by_id
+    }
 
     # every resource's region: its most specific own tag (the first by name between equals)
     home: dict[int, int] = {}

@@ -72,6 +72,8 @@ CREATE TABLE IF NOT EXISTS tags (
     workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     -- the tag this one is a sub-tag of; if that tag goes, its sub-tags move up (see delete_tag)
     parent_id    INTEGER REFERENCES tags(id) ON DELETE SET NULL,
+    -- a top-level tag's colour, an index into the palette (NULL: automatic)
+    color        INTEGER,
     UNIQUE (workspace_id, name)
 );
 CREATE TABLE IF NOT EXISTS resource_tags (
@@ -689,6 +691,8 @@ class SqliteTodoRepository(TodoRepository):
             self._conn.execute(
                 "ALTER TABLE tags ADD COLUMN parent_id INTEGER REFERENCES tags(id) ON DELETE SET NULL"
             )
+        if "color" not in columns:
+            self._conn.execute("ALTER TABLE tags ADD COLUMN color INTEGER")
 
     def _check_parent(self, tag_id: TagId | None, workspace_id: WorkspaceId, parent_id: TagId | None) -> None:
         """A parent must be a tag of the same workspace and not the tag itself or below it."""
@@ -709,20 +713,26 @@ class SqliteTodoRepository(TodoRepository):
     def list_tags(self, workspace_id: WorkspaceId) -> list[Tag]:
         with _translate_errors():
             rows = self._conn.execute(
-                "SELECT id, name, parent_id FROM tags WHERE workspace_id = ?"
+                "SELECT id, name, parent_id, color FROM tags WHERE workspace_id = ?"
                 " ORDER BY name COLLATE NOCASE, id",
                 (workspace_id,),
             ).fetchall()
-            return [Tag(r["id"], r["name"], r["parent_id"]) for r in rows]
+            return [Tag(r["id"], r["name"], r["parent_id"], r["color"]) for r in rows]
 
-    def create_tag(self, workspace_id: WorkspaceId, name: str, parent_id: TagId | None = None) -> Tag:
+    def create_tag(
+        self, workspace_id: WorkspaceId, name: str, parent_id: TagId | None = None, color: int | None = None
+    ) -> Tag:
         with _translate_errors(), self._conn:
             self._check_parent(None, workspace_id, parent_id)
             cur = self._conn.execute(
-                "INSERT INTO tags (name, workspace_id, parent_id) VALUES (?, ?, ?)",
-                (name, workspace_id, parent_id),
+                "INSERT INTO tags (name, workspace_id, parent_id, color) VALUES (?, ?, ?, ?)",
+                (name, workspace_id, parent_id, color),
             )
-            return Tag(cur.lastrowid, name, parent_id)
+            return Tag(cur.lastrowid, name, parent_id, color)
+
+    def set_tag_color(self, tag_id: TagId, color: int | None) -> None:
+        with _translate_errors(), self._conn:
+            self._conn.execute("UPDATE tags SET color = ? WHERE id = ?", (color, tag_id))
 
     def rename_tag(self, tag_id: TagId, name: str) -> None:
         with _translate_errors(), self._conn:

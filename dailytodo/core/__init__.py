@@ -49,11 +49,14 @@ from .presentations import (
     read_annotations,
 )
 from .labels import (
+    COLOR_COUNT,
     LabelRow,
     ancestors,
     descendants,
     expand_filter,
+    free_color,
     label_rows,
+    tag_colors,
     valid_parents,
     with_ancestors,
 )

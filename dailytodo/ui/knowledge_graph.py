@@ -106,7 +106,7 @@ class KnowledgeGraphModel(QObject):
             return
         tags = self._tags()
         names = {t.id: t.name for t in tags}
-        graph_tags = tuple(GraphTag(t.id, t.name, t.parent_id) for t in tags)
+        graph_tags = tuple(GraphTag(t.id, t.name, t.parent_id, t.color) for t in tags)
         resources = []
         for c in self._cards().values():
             # the legend's filter also finds what is tagged with a sub-tag
