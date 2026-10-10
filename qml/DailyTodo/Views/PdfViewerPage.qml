@@ -30,6 +30,20 @@ Item {
     // scroll, so this is a notes tab where the page of a note is typed in.
     property bool hasDocument: true
 
+    // How far along this document is (a resource status). The end of the pages offers to mark it
+    // finished. Kept in step with the resource's menu and the graph through the controller.
+    property string status: "unopened"
+    function loadStatus() {
+        const info = controller.resourceInfo(resourceId)
+        if (info.id !== undefined) status = info.status
+    }
+    Connections {
+        target: view.controller
+        function onResourceStatusChanged(id, newStatus) {
+            if (id === view.resourceId) view.status = newStatus
+        }
+    }
+
     property int selectionPage: -1           // the page (0-based) whose text selection is the live one
     // A text box (note, answer, page field...) has the keyboard: copy/paste belong to it.
     readonly property bool textBoxFocused: {
@@ -111,6 +125,7 @@ Item {
         return null
     }
     onResourceIdChanged: {
+        loadStatus()
         if (resourceId >= 0 && session === null) {
             session = controller.createNotesSession(resourceId)
             session.loadNow(currentPage)
@@ -783,6 +798,54 @@ Item {
 
         ScrollBar.vertical: AppScrollBar { z: 6 }
         ScrollBar.horizontal: AppScrollBar { z: 6 }      // only appears when zoomed in
+
+        // After the last page: you've reached the end, so offer to mark the document as finished.
+        footer: Item {
+            width: pages.contentWidth
+            height: 150
+
+            Column {
+                x: Math.min(pages.contentWidth, pages.width) / 2 - width / 2
+                y: 8
+                width: Math.min(pages.width - 2 * view.pageMargin, 320)
+                spacing: 10
+
+                CapsLabel {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "End of document"
+                    color: Theme.textFaint
+                }
+                AppButton {
+                    visible: view.status !== "finished"
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "Mark as finished"
+                    filled: true
+                    onClicked: view.controller.setResourceStatus(view.resourceId, "finished")
+                }
+                Row {
+                    visible: view.status === "finished"
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: 8
+                    StatusDot {
+                        anchors.verticalCenter: parent.verticalCenter
+                        status: "finished"
+                        size: 14
+                    }
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "Marked as finished"
+                        font.pixelSize: 13
+                        color: Theme.textMuted
+                    }
+                    AppButton {
+                        anchors.verticalCenter: parent.verticalCenter
+                        compact: true
+                        text: "Undo"
+                        onClicked: view.controller.setResourceStatus(view.resourceId, "in_progress")
+                    }
+                }
+            }
+        }
 
         delegate: Item {
             id: pageItem
