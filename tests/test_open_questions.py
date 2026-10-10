@@ -126,12 +126,12 @@ class OpenQuestionsTest(unittest.TestCase):
         self.assertEqual(pdf_tabs, [])
         self.assertEqual(notes_tabs, [(self.alpha, "Alpha", "https://a.example/x", 3)])
 
-    def test_clicking_a_non_pdf_opens_it_outside_and_a_notes_tab_inside(self):
+    def test_clicking_a_web_link_only_opens_its_notes_tab(self):
         order = []
         self.ctl.notesRequested.connect(lambda *a: order.append(("tab", a[0])))
         self.ctl.openResource = lambda uri: order.append(("external", uri))
         self.ctl.openResourceById(self.alpha)
-        self.assertEqual(order, [("tab", self.alpha), ("external", "https://a.example/x")])
+        self.assertEqual(order, [("tab", self.alpha)])  # "Open link" in the tab opens the page
 
     def test_noted_pages_for_resources_without_pages(self):
         session = self.ctl.createNotesSession(self.alpha)

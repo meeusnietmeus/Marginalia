@@ -183,7 +183,7 @@ class VideoControllerTest(unittest.TestCase):
 
     def test_other_links_keep_the_notes_tab(self):
         self.ctl.openResourceById(self.page)
-        self.assertEqual((self.videos, len(self.notes), self.launched), ([], 1, ["https://example.com/x"]))
+        self.assertEqual((self.videos, len(self.notes), self.launched), ([], 1, []))
 
     def test_timestamp_slots(self):
         self.assertEqual((self.ctl.timestampOf("1:05"), self.ctl.timestampOf("zzz")), (65, -1))
