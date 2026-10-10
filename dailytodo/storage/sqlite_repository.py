@@ -414,6 +414,17 @@ class SqliteTodoRepository(TodoRepository):
         with _translate_errors(), self._conn:
             self._conn.execute("UPDATE resources SET status = ? WHERE id = ?", (status, resource_id))
 
+    def list_workspace_notes(self, workspace_id: WorkspaceId) -> list[Note]:
+        with _translate_errors():
+            rows = self._conn.execute(
+                "SELECT n.id, n.resource_id, n.page, n.body, n.is_question, n.parent_id,"
+                " n.created_at, n.updated_at, n.highlight_id FROM notes n"
+                " JOIN resources r ON r.id = n.resource_id"
+                " WHERE r.workspace_id = ? ORDER BY n.id",
+                (workspace_id,),
+            ).fetchall()
+            return [_note(r) for r in rows]
+
     def list_open_questions(self, workspace_id: WorkspaceId) -> list[Note]:
         with _translate_errors():
             rows = self._conn.execute(

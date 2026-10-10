@@ -118,6 +118,10 @@ class TodoRepository(ABC):
         they belong to their question."""
 
     @abstractmethod
+    def list_workspace_notes(self, workspace_id: WorkspaceId) -> list[Note]:
+        """Every note, question and answer of the workspace's resources, oldest first."""
+
+    @abstractmethod
     def list_open_questions(self, workspace_id: WorkspaceId) -> list[Note]:
         """Every question of the workspace's resources that has no answer yet, oldest first."""
 

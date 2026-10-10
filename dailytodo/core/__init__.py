@@ -64,6 +64,7 @@ from .labels import (
 )
 from .links import split_links, with_scheme
 from .references import referenced_resource_ids, sanitize_name, search, segments, to_edit_text, to_storage_text
+from .note_search import search_notes
 from .unified_view import FILTERS as UNIFIED_FILTERS, unified_rows
 from .pdf_export import pdf_markdown, safe_file_name
 from .open_questions import ResourceQuestions, group_by_resource, order_for_resource, page_label
@@ -155,6 +156,7 @@ __all__ = [
     "sanitize_name",
     "search",
     "segments",
+    "search_notes",
     "UNIFIED_FILTERS",
     "unified_rows",
     "suggest_name",
