@@ -63,6 +63,7 @@ from ..core import (
     read_annotations,
     recently_used,
     time_ago,
+    search_notes,
     unified_rows,
 )
 from ..powerpoint import ExportResult, convert_to_pptx, export_pdf
@@ -1444,6 +1445,17 @@ class TodoController(QObject):
             self.notify.emit(f"Export failed: {exc}")
             return
         self.notify.emit(f"Exported to {dest}")
+
+    @Slot(str, result="QVariantMap")
+    def searchNotes(self, term: str) -> dict:
+        """The notes, questions and answers of the open workspace that contain ``term`` (see
+        core.search_notes), for the search page."""
+        try:
+            notes = self._repo.list_workspace_notes(self._workspace_id)
+        except RepositoryError as exc:
+            self.notify.emit(f"Couldn't search: {exc}")
+            return {"total": 0, "groups": []}
+        return search_notes(notes, self._cards, term, plain=lambda body: to_edit_text(body, self._name_of))
 
     @Slot(int, str, result="QVariantMap")
     def unifiedNotes(self, resource_id: ResourceId, mode: str = "all") -> dict:

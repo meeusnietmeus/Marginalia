@@ -46,7 +46,7 @@ ApplicationWindow {
     FocusClearTapHandler { hostWindow: root }
 
     // ---- navigation state ----
-    property string currentView: "overview"   // "overview", "questions", "graph", or "tab" (an entry of `tabs`)
+    property string currentView: "overview"   // "overview", "questions", "graph", "search", or "tab" (an entry of `tabs`)
     property int currentTab: -1               // index into `tabs` while currentView === "tab"
 
     property string settingsFolder: ""        // the workspace settings dialog's view of the setting
@@ -194,7 +194,7 @@ ApplicationWindow {
         currentTab: root.currentTab
         onWorkspaceSelected: (id) => root.controller.setWorkspace(id)
         onCreateWorkspaceRequested: newWorkspace.open()
-        onViewRequested: (kind) => root.currentView = kind    // "overview" | "questions" | "graph"
+        onViewRequested: (kind) => root.currentView = kind    // "overview" | "questions" | "graph" | "search"
         onTabClicked: (index) => { root.currentView = "tab"; root.currentTab = index }
         onTabCloseClicked: (index) => root.closeTab(index)
         onWorkspaceSettingsRequested: workspaceSettings.open()
@@ -214,7 +214,8 @@ ApplicationWindow {
         anchors.topMargin: 10                // a little air under the navbar, on every page
         currentIndex: root.currentView === "overview" ? 0
                     : root.currentView === "questions" ? 1
-                    : root.currentView === "graph" ? 2 : 3 + root.currentTab
+                    : root.currentView === "graph" ? 2
+                    : root.currentView === "search" ? 3 : 4 + root.currentTab
 
         OverviewPage { controller: root.controller; actions: resourceActions }
         // Made when first opened, unloaded 5 minutes after they were left (the Overview stays).
@@ -230,6 +231,8 @@ ApplicationWindow {
             onLoaded: if (tagToShow > -2) { item.showTag(tagToShow); tagToShow = -2 }
             sourceComponent: KnowledgeGraphPage { controller: root.controller; actions: resourceActions }
         }
+
+        SearchPage { controller: root.controller; actions: resourceActions }
 
         Repeater {
             id: tabRepeater
