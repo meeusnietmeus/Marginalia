@@ -30,7 +30,7 @@ dailytodo/
   core/                      plain Python, no Qt, no storage: models, days, resources, labels (tags),
                              references (@{..} / !{..}), notes, open questions, video timestamps and
                              timeline, presentations (reading notes/comments), knowledge graph layout,
-                             Markdown export
+                             flowchart files (JSON Canvas), Markdown export
   storage/                   persistence, no Qt
     base.py                  TodoRepository contract, BackupCapable, RepositoryError
     sqlite_repository.py     SQLite implementation (the central data)
@@ -57,8 +57,8 @@ Dependencies only point inwards: `core` <- `storage` <- `ui` <- `app.py`; the he
 
 Pages other than the Overview are made the first time they are shown, which keeps startup short.
 Opening a resource always goes through `TodoController.openResourceById` / `openResourceAtPage`:
-the controller decides which tab it gets (PDF, presentation, video or notes tab) and tells `Main.qml`
-with `pdfRequested`, `videoRequested` or `notesRequested`.
+the controller decides which tab it gets (PDF, presentation, video, flowchart or notes tab) and tells
+`Main.qml` with `pdfRequested`, `videoRequested`, `flowchartRequested` or `notesRequested`.
 
 ## Presentations (PowerPoint)
 
@@ -73,6 +73,33 @@ Known limits: hidden slides are exported too (slide n is page n); animations and
 gone (still pictures); ink is only there if PowerPoint draws it into the slide; comments are listed
 but not pinned at their position; a hand-made PDF with the same name is trusted if it is newer, and
 overwritten if it is older; two presentations with the same file name share one PDF per workspace.
+
+## Flowcharts
+
+A flowchart is a resource like any other, of the kind "flowchart": a `.canvas` file holding the
+whole chart (nothing of it is in the database, only which document it is attached to). Make one from
+a PDF's or presentation's tab (the flowchart button at the bottom left: it lists the flowcharts of
+that document and makes a new one, attached to it), or add any `.canvas` file as a new resource
+and attach it in the flowchart's Edit mode.
+
+The file is [JSON Canvas](https://jsoncanvas.org), the open format of Obsidian's canvases, so it
+opens there too. A node's `text` is its title on the first line (`# Title`) and, after that, the
+body that only shows on hover; one field is added: `page`, a page of the attached document (click
+the "p. 12" on the node to open the document there). Reading is forgiving, for files written by
+hand or by an AI: `title`/`body` instead of `text`, `from`/`to` on edges, and nodes without a
+position are laid out left to right along the arrows. See `core/flowchart.py`.
+
+To have an AI make one: the sparkles menu (or the buttons on an empty chart) copies a prompt that
+explains the format; give it to a chat together with the document, copy the answer, and use
+"Replace with the AI's answer (paste)".
+
+The tab has two modes. **View**: drag the grid to move around, scroll to zoom, hover a node to read
+its body. **Edit**, also: double-click the grid for a node, drag nodes around (they snap to the
+grid), drag from one of the green dots on a node's sides to another node for an arrow (or to empty
+space for a new, connected node), click a node or arrow to change it in the panel on the right, Del
+removes, Ctrl+Z / Ctrl+Shift+Z undo and redo. Every change is written to the file a moment later;
+the file is read again whenever the tab is shown, so changes made elsewhere come through.
+
 ## Notes from YouTube (browser extension)
 
 On a YouTube video, press **N** (note) or **Q** (question): the video pauses and Marginalia comes up

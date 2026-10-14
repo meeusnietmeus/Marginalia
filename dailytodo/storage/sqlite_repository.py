@@ -61,7 +61,9 @@ CREATE TABLE IF NOT EXISTS resources (
     created_at   TEXT    NOT NULL,           -- ISO 8601, UTC
     last_used_at TEXT    NOT NULL,           -- ISO 8601, UTC; for "most recently used" ordering
     status       TEXT    NOT NULL DEFAULT 'unopened',  -- unopened | opened | in_progress | finished
-    workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE
+    workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    -- a flowchart: the document it is about (its content is in its own file, see core/flowchart.py)
+    attached_to  INTEGER REFERENCES resources(id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS idx_resources_workspace ON resources(workspace_id);
 """
@@ -312,6 +314,11 @@ class SqliteTodoRepository(TodoRepository):
             conn.execute("ALTER TABLE resources ADD COLUMN status TEXT NOT NULL DEFAULT 'unopened'")
             # what was opened before there was a status counts as opened
             conn.execute("UPDATE resources SET status = 'opened' WHERE last_used_at <> created_at")
+        if "attached_to" not in columns:
+            conn.execute(
+                "ALTER TABLE resources ADD COLUMN attached_to INTEGER"
+                " REFERENCES resources(id) ON DELETE SET NULL"
+            )
 
     # ------------------------------------------------------------- reads
     def list_workspaces(self) -> list[Workspace]:
@@ -335,7 +342,7 @@ class SqliteTodoRepository(TodoRepository):
     def list_resources(self, workspace_id: WorkspaceId) -> list[Resource]:
         with _translate_errors():
             rows = self._conn.execute(
-                "SELECT id, name, uri, created_at, last_used_at, status FROM resources"
+                "SELECT id, name, uri, created_at, last_used_at, status, attached_to FROM resources"
                 " WHERE workspace_id = ? ORDER BY id",
                 (workspace_id,),
             ).fetchall()
@@ -347,6 +354,7 @@ class SqliteTodoRepository(TodoRepository):
                     datetime.fromisoformat(r["created_at"]),
                     datetime.fromisoformat(r["last_used_at"]),
                     r["status"],
+                    r["attached_to"],
                 )
                 for r in rows
             ]
@@ -406,6 +414,20 @@ class SqliteTodoRepository(TodoRepository):
                 "UPDATE resources SET last_used_at = ?,"
                 " status = CASE WHEN status = 'unopened' THEN 'opened' ELSE status END WHERE id = ?",
                 (_now(), resource_id),
+            )
+
+    def set_resource_attachment(self, resource_id: ResourceId, attached_to: ResourceId | None) -> None:
+        with _translate_errors(), self._conn:
+            if attached_to is not None:
+                same_workspace = self._conn.execute(
+                    "SELECT 1 FROM resources a JOIN resources b ON a.workspace_id = b.workspace_id"
+                    " WHERE a.id = ? AND b.id = ? AND a.id <> b.id",
+                    (resource_id, attached_to),
+                ).fetchone()
+                if not same_workspace:
+                    raise RepositoryError("A resource can only be attached to another one of its workspace")
+            self._conn.execute(
+                "UPDATE resources SET attached_to = ? WHERE id = ?", (attached_to, resource_id)
             )
 
     def set_resource_status(self, resource_id: ResourceId, status: str) -> None:

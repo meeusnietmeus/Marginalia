@@ -93,3 +93,4 @@ class Resource:
     created_at: datetime  # UTC
     last_used_at: datetime  # UTC; starts at created_at, bumped whenever the resource is opened
     status: str = "unopened"  # how far along it is, one of resources.STATUSES
+    attached_to: ResourceId | None = None  # a flowchart: the document (PDF, presentation) it is about

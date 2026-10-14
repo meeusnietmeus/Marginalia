@@ -62,6 +62,15 @@ from .labels import (
     valid_parents,
     with_ancestors,
 )
+from .flowchart import (
+    AI_PROMPT as FLOWCHART_AI_PROMPT,
+    FILE_SUFFIX as FLOWCHART_SUFFIX,
+    Flowchart,
+    FlowchartError,
+    dump_flowchart,
+    flowchart_from_view,
+    parse_flowchart,
+)
 from .links import split_links, with_scheme
 from .references import referenced_resource_ids, sanitize_name, search, segments, to_edit_text, to_storage_text
 from .note_search import search_notes
@@ -70,6 +79,7 @@ from .pdf_export import pdf_markdown, safe_file_name
 from .open_questions import ResourceQuestions, group_by_resource, order_for_resource, page_label
 from .resources import (
     DEFAULT_STATUS,
+    DOCUMENT_KINDS,
     SORTS,
     STATUSES,
     STATUS_LABELS,
@@ -100,6 +110,7 @@ __all__ = [
     "Resource",
     "ResourceCard",
     "DEFAULT_STATUS",
+    "DOCUMENT_KINDS",
     "STATUSES",
     "STATUS_LABELS",
     "is_status",
@@ -177,4 +188,11 @@ __all__ = [
     "to_edit_text",
     "to_storage_text",
     "with_question_mark",
+    "FLOWCHART_AI_PROMPT",
+    "FLOWCHART_SUFFIX",
+    "Flowchart",
+    "FlowchartError",
+    "dump_flowchart",
+    "flowchart_from_view",
+    "parse_flowchart",
 ]
