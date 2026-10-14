@@ -36,6 +36,39 @@ class FormatTest(unittest.TestCase):
         )
         self.assertEqual(parse_flowchart(dump_flowchart(chart)), chart)
 
+    def test_notes_and_collapsed_nodes_round_trip(self):
+        chart = Flowchart(
+            [FlowNode("a", "Start", "", 0, 0, collapsed=True),
+             FlowNode("n", "", "Just a remark", 0, 200, note=True),
+             FlowNode("m", "Heading", "and text", 300, 200, note=True)],
+            [],
+        )
+        self.assertEqual(parse_flowchart(dump_flowchart(chart)), chart)
+        node = json.loads(dump_flowchart(chart))["nodes"]
+        self.assertEqual((node[0].get("collapsed"), node[1].get("note"), node[1]["text"]),
+                         (True, True, "Just a remark"))
+        self.assertNotIn("note", node[0])
+        self.assertEqual(flowchart_from_view(chart.to_view()), chart)
+
+    def test_list_edges_round_trip(self):
+        chart = Flowchart(
+            [FlowNode("p", "Parent"), FlowNode("a", "Case A"), FlowNode("b", "Case B")],
+            [FlowEdge("e1", "p", "a", list=True), FlowEdge("e2", "p", "b")],
+        )
+        self.assertEqual(parse_flowchart(dump_flowchart(chart)), chart)
+        self.assertEqual(flowchart_from_view(chart.to_view()), chart)
+        edges = json.loads(dump_flowchart(chart))["edges"]
+        self.assertEqual([e.get("list") for e in edges], [True, None])
+
+    def test_a_note_needs_a_title_or_a_body(self):
+        chart = parse_flowchart(json.dumps({"nodes": [
+            {"id": "n", "note": True, "text": "  ", "x": 0, "y": 0},
+            {"id": "m", "note": True, "title": "", "body": "kept", "x": 0, "y": 0},
+            {"id": "a", "text": "", "x": 0, "y": 0},          # a node keeps its place: "Untitled"
+        ]}))
+        self.assertEqual([(n.id, n.title, n.body) for n in chart.nodes],
+                         [("m", "", "kept"), ("a", "Untitled", "")])
+
     def test_the_file_is_json_canvas(self):
         text = dump_flowchart(Flowchart([FlowNode("a", "A", "body", 1.6, 2)], []))
         node = json.loads(text)["nodes"][0]

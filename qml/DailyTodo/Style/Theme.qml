@@ -191,6 +191,9 @@ QtObject {
     readonly property color resourceVideo: "#d4424a"
     readonly property color resourceLink: "#8b6fc9"
     readonly property color resourceFlowchart: "#3f9e8f"
+    // a free-floating note on a flowchart: a lighter card than a node, like paper
+    readonly property color flowNote: "#54432f"
+    readonly property color flowNoteRaised: "#5f4c36"
     readonly property color resourceFile: "#8a7660"
 
     // ---- flowcharts: the colour presets of JSON Canvas ("1" red ... "6" purple) or "#rrggbb" ----
