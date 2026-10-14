@@ -55,6 +55,75 @@ ApplicationWindow {
     // kind: "pdf" (a PDF, or with hasDocument false the notes tab of any other resource) | "video" |
     // "unified" (every note and question of a PDF on one page; a second tab of the same resource).
     ListModel { id: tabs }
+    property int nextTabUid: 1                // every tab gets its own uid: indexes shift when one closes
+
+    // ---- recently used (Ctrl+Tab) ----
+    // The pages and tabs in the order they were last shown, most recent first, as keys: "overview",
+    // "questions", "graph", "search" or "tab:<uid>". Closed tabs drop out when the list is used.
+    property var recentViews: ["overview"]
+    function viewKey() { return currentView === "tab" ? (currentTab >= 0 && currentTab < tabs.count ? "tab:" + tabs.get(currentTab).uid : "") : currentView }
+    function noteVisit() {
+        const key = viewKey()
+        if (key === "") return
+        recentViews = [key].concat(recentViews.filter(k => k !== key))
+    }
+    onCurrentViewChanged: Qt.callLater(noteVisit)       // (opening a tab sets both: count it once)
+    onCurrentTabChanged: Qt.callLater(noteVisit)
+    function tabIndexOf(uid) {
+        for (let i = 0; i < tabs.count; i++) if (tabs.get(i).uid === uid) return i
+        return -1
+    }
+    // What Ctrl+Tab offers: the recent ones that are still there, leaving out the pages that have
+    // unloaded themselves (LazyPage, after a while away).
+    function switcherEntries() {
+        const pages = {
+            overview: { title: "Overview", icon: Theme.iconCalendar },
+            questions: { title: "Open questions", icon: Theme.iconInfo, page: questionsPage },
+            graph: { title: "Knowledge graph", icon: Theme.iconLink, page: graphPage },
+            search: { title: "Search", icon: Theme.iconSearch }
+        }
+        const current = viewKey()
+        const list = []
+        for (const key of recentViews) {
+            if (key.startsWith("tab:")) {
+                const i = tabIndexOf(parseInt(key.slice(4)))
+                if (i < 0) continue
+                const tab = tabs.get(i)
+                const info = controller.resourceInfo(tab.resourceId)
+                list.push({ key: key, title: tab.title, kind: info.kind || "file",
+                            caption: tab.kind === "unified" ? "All notes" : (info.kind || "") })
+            } else {
+                const p = pages[key]
+                if (!p || (p.page && !p.page.loaded && key !== current)) continue
+                list.push({ key: key, title: p.title, icon: p.icon, caption: "Page" })
+            }
+        }
+        return list
+    }
+    function cycleViews(delta) {
+        if (tabSwitcher.open) tabSwitcher.step(delta)
+        else tabSwitcher.start(switcherEntries(), delta < 0, root.activeFocusItem)
+    }
+    function showView(key) {
+        if (key.startsWith("tab:")) {
+            const i = tabIndexOf(parseInt(key.slice(4)))
+            if (i < 0) return
+            currentView = "tab"
+            currentTab = i
+        } else {
+            currentView = key
+        }
+    }
+    Shortcut {
+        sequence: "Ctrl+Tab"
+        onActivated: root.cycleViews(1)
+    }
+    Shortcut {
+        // Shift+Tab arrives as Backtab
+        sequences: ["Ctrl+Shift+Tab", "Ctrl+Shift+Backtab", "Ctrl+Backtab"]
+        onActivated: root.cycleViews(-1)
+    }
+    onActiveChanged: if (!active) tabSwitcher.cancel()
 
     // Opens a resource in its own tab, or switches to the tab it is already open in. A PDF shows
     // its pages; any other resource (hasDocument false) is a notes tab, where the page is typed in.
@@ -78,7 +147,7 @@ ApplicationWindow {
             }
         }
         tabs.append({ title: title, kind: kind, uri: uri, resourceId: resourceId,
-                      startPage: startPage, hasDocument: hasDocument })
+                      startPage: startPage, hasDocument: hasDocument, uid: nextTabUid++ })
         currentView = "tab"
         currentTab = tabs.count - 1
     }
@@ -383,6 +452,16 @@ ApplicationWindow {
                 onExpired: root.controller.expireUndo(token)
                 onRemoved: root.removeUndoToast(token)
             }
+        }
+    }
+
+    TabSwitcher {
+        id: tabSwitcher
+        z: 30
+        anchors.fill: parent
+        onChosen: (key) => {
+            root.showView(key)
+            root.contentItem.forceActiveFocus()          // out of whatever field had the keyboard
         }
     }
 

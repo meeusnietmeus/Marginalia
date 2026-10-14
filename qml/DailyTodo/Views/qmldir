@@ -55,3 +55,4 @@ MomentScrubber 1.0 MomentScrubber.qml
 ResourceActions 1.0 ResourceActions.qml
 LazyPage 1.0 LazyPage.qml
 TagPicker 1.0 TagPicker.qml
+TabSwitcher 1.0 TabSwitcher.qml
