@@ -17,6 +17,14 @@ from PySide6.QtGui import QDesktopServices, QGuiApplication, QTextCharFormat, QT
 from PySide6.QtQuick import QQuickTextDocument
 
 from ..core import (
+    DOCUMENT_KINDS,
+    FLOWCHART_AI_PROMPT,
+    FLOWCHART_SUFFIX,
+    Flowchart,
+    FlowchartError,
+    dump_flowchart,
+    flowchart_from_view,
+    parse_flowchart,
     SORTS,
     STATUSES,
     STATUS_LABELS,
@@ -128,6 +136,8 @@ class TodoController(QObject):
     # (id, name, uri, page): open the notes tab of a resource that is not a PDF (no pages to scroll)
     notesRequested = Signal(int, str, str, int)
     videoRequested = Signal(int, str, str, int)  # (id, name, link, timestamp or 0)
+    flowchartRequested = Signal(int, str, str)  # (id, name, path of its .canvas file)
+    attachmentsChanged = Signal()  # a flowchart was made, attached or detached
     _presentationExported = Signal(int, str, str, str, int)  # (id, name, pdf, error, page)
     _annotationsConverted = Signal(int, str)  # (id, error)
     presentationAnnotationsReady = Signal(int)  # the notes and comments of this one can be read now
@@ -920,7 +930,8 @@ class TodoController(QObject):
             return {}
         return {"id": card.id, "name": card.name, "uri": card.uri, "kind": card.kind,
                 "isPath": card.is_path, "missing": card.missing, "tagIds": list(card.tag_ids),
-                "status": card.status}
+                "status": card.status,
+                "attachedTo": card.attached_to if card.attached_to in self._cards else -1}
 
     @Slot(int)
     def openResourceById(self, resource_id: ResourceId) -> None:
@@ -953,10 +964,143 @@ class TodoController(QObject):
             self._open_presentation(card, page)
         elif card.kind == "video":
             self.videoRequested.emit(card.id, card.name, card.uri, page)
+        elif card.kind == "flowchart":
+            self.flowchartRequested.emit(card.id, card.name, card.uri)
         else:
             self.notesRequested.emit(card.id, card.name, card.uri, page)
             if launch and card.is_path:
                 self.openResource(card.uri)
+
+    # ------------------------------------------------------------ flowcharts
+    # A flowchart is a resource whose file (.canvas, JSON Canvas) holds the whole chart; the
+    # database only knows the file and which document it is attached to. See core/flowchart.py.
+    def _flowchart_folder(self) -> Path:
+        """Where new flowcharts go: the workspace's folder, else the app's data folder."""
+        folder = self._resource_folder_of(self._workspace_id)
+        if folder:
+            return Path(folder)
+        base = self._data_dir if self._data_dir is not None else Path(tempfile.gettempdir())
+        return base / "flowcharts" / f"workspace-{self._workspace_id}"
+
+    @Slot(int, result="QVariantMap")
+    def loadFlowchart(self, resource_id: ResourceId) -> dict:
+        """{"ok", "error", "nodes", "edges"} of a flowchart resource (see Flowchart.to_view)."""
+        card = self._cards.get(resource_id)
+        if card is None or card.kind != "flowchart":
+            return {"ok": False, "error": "This flowchart is not in this workspace any more"}
+        try:
+            text = Path(card.uri).read_text(encoding="utf-8-sig")
+            chart = parse_flowchart(text)
+        except OSError as exc:
+            return {"ok": False, "error": f"Couldn't read the file: {exc.strerror or exc}"}
+        except FlowchartError as exc:
+            return {"ok": False, "error": f"The file is not a flowchart: {exc}"}
+        return {"ok": True, "error": "", **chart.to_view()}
+
+    @Slot(int, "QVariantMap", result=bool)
+    def saveFlowchart(self, resource_id: ResourceId, data: dict) -> bool:
+        """Write the chart as the view has it. Written to a file next to it first and then moved
+        over it, so a crash halfway never leaves half a file."""
+        card = self._cards.get(resource_id)
+        if card is None or card.kind != "flowchart":
+            return False
+        try:
+            text = dump_flowchart(flowchart_from_view(data))
+        except FlowchartError as exc:
+            self.notify.emit(f"Couldn't save the flowchart: {exc}")
+            return False
+        target = Path(card.uri)
+        temporary = target.with_name(target.name + ".saving")
+        try:
+            temporary.write_text(text, encoding="utf-8", newline="\n")
+            os.replace(temporary, target)
+        except OSError as exc:
+            temporary.unlink(missing_ok=True)
+            self.notify.emit(f"Couldn't save the flowchart: {exc.strerror or exc}")
+            return False
+        return True
+
+    @Slot()
+    def copyFlowchartPrompt(self) -> None:
+        """Put the instructions for an AI on the clipboard: paste them with the document's text
+        into a chat, then paste its answer back with pasteFlowchart."""
+        QGuiApplication.clipboard().setText(FLOWCHART_AI_PROMPT)
+        self.notify.emit("Copied: give this to an AI together with the document")
+
+    @Slot(result="QVariantMap")
+    def pasteFlowchart(self) -> dict:
+        """The flowchart on the clipboard (what an AI answered), as loadFlowchart gives it. An
+        answer with text or a code fence around the JSON is fine too."""
+        text = QGuiApplication.clipboard().text().strip()
+        start, end = text.find("{"), text.rfind("}")
+        if start < 0 or end < start:
+            self.notify.emit("The clipboard has no flowchart (JSON Canvas) in it")
+            return {"ok": False}
+        try:
+            chart = parse_flowchart(text[start : end + 1])
+        except FlowchartError as exc:
+            self.notify.emit(f"The clipboard has no flowchart in it: {exc}")
+            return {"ok": False}
+        if not chart.nodes:
+            self.notify.emit("The flowchart on the clipboard has no nodes")
+            return {"ok": False}
+        return {"ok": True, **chart.to_view()}
+
+    @Slot(str, int, result=int)
+    def createFlowchart(self, name: str, attach_to: int = -1) -> int:
+        """Make an empty flowchart (its file in the workspace's folder), attached to a document
+        when ``attach_to`` is one, and open it. Returns its id, or -1."""
+        name = name.strip() or "Flowchart"
+        try:
+            path = write_text_unique(
+                self._flowchart_folder(), safe_file_name(name, FLOWCHART_SUFFIX),
+                dump_flowchart(Flowchart()),
+            )
+        except OSError as exc:
+            self.notify.emit(f"Couldn't make the flowchart file: {exc.strerror or exc}")
+            return -1
+        try:
+            resource = self._repo.add_resource(self._workspace_id, str(path), name)
+            if attach_to >= 0 and attach_to in self._cards:
+                self._repo.set_resource_attachment(resource.id, attach_to)
+        except RepositoryError as exc:
+            path.unlink(missing_ok=True)
+            self.notify.emit(f"Couldn't add the flowchart: {exc}")
+            return -1
+        self._refresh_resources()
+        self.attachmentsChanged.emit()
+        self._open(resource.id, 0, launch=False)
+        return resource.id
+
+    @Slot(int, result="QVariantList")
+    def flowchartsOf(self, resource_id: ResourceId) -> list[dict]:
+        """The flowcharts attached to a document: [{"id", "name", "missing"}], by name."""
+        charts = [c for c in self._cards.values()
+                  if c.kind == "flowchart" and c.attached_to == resource_id]
+        charts.sort(key=lambda c: c.name.casefold())
+        return [{"id": c.id, "name": c.name, "missing": c.missing} for c in charts]
+
+    @Slot(result="QVariantList")
+    def documentChoices(self) -> list[dict]:
+        """What a flowchart can be attached to: the PDFs and presentations, by name."""
+        docs = [c for c in self._cards.values() if c.kind in DOCUMENT_KINDS]
+        docs.sort(key=lambda c: c.name.casefold())
+        return [{"id": c.id, "name": c.name, "kind": c.kind} for c in docs]
+
+    @Slot(int, int)
+    def setAttachment(self, resource_id: ResourceId, document_id: int) -> None:
+        """Attach a flowchart to a document, or detach it (-1)."""
+        if resource_id not in self._cards:
+            return
+        try:
+            self._repo.set_resource_attachment(
+                resource_id, document_id if document_id >= 0 else None
+            )
+        except RepositoryError as exc:
+            self.notify.emit(f"Couldn't attach the flowchart: {exc}")
+            return
+        self._refresh_resources()
+        self.attachmentsChanged.emit()
 
     @Slot(int, result=QObject)
     def createNotesSession(self, resource_id: ResourceId) -> NotesSession:

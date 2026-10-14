@@ -53,7 +53,8 @@ ApplicationWindow {
 
     // Open resource tabs, after the fixed pages (Overview, Open questions, Knowledge graph).
     // kind: "pdf" (a PDF, or with hasDocument false the notes tab of any other resource) | "video" |
-    // "unified" (every note and question of a PDF on one page; a second tab of the same resource).
+    // "flowchart" | "unified" (every note and question of a PDF on one page; a second tab of the
+    // same resource).
     ListModel { id: tabs }
 
     // Opens a resource in its own tab, or switches to the tab it is already open in. A PDF shows
@@ -63,6 +64,7 @@ ApplicationWindow {
     function openPdf(resourceId, title, uri, page) { openResourceTab(resourceId, title, uri, page, true, "pdf") }
     function openNotes(resourceId, title, uri, page) { openResourceTab(resourceId, title, uri, page, false, "pdf") }
     function openVideo(resourceId, title, uri, page) { openResourceTab(resourceId, title, uri, page, false, "video") }
+    function openFlowchart(resourceId, title, uri) { openResourceTab(resourceId, title, uri, 0, false, "flowchart") }
     function openUnified(resourceId, title) { openResourceTab(resourceId, "Notes: " + title, "", 0, true, "unified") }
     function openResourceTab(resourceId, title, uri, page, hasDocument, kind) {
         const startPage = page || 0
@@ -244,7 +246,8 @@ ApplicationWindow {
                 required property int resourceId
                 required property int startPage
                 required property bool hasDocument
-                sourceComponent: kind === "video" ? videoTab : kind === "unified" ? unifiedTab : pdfViewerTab
+                sourceComponent: kind === "video" ? videoTab : kind === "unified" ? unifiedTab
+                               : kind === "flowchart" ? flowchartTab : pdfViewerTab
                 onLoaded: {
                     item.title = kind === "unified" ? title.replace(/^Notes: /, "") : title
                     if (kind === "unified") {
@@ -278,6 +281,11 @@ ApplicationWindow {
     Component {
         id: videoTab
         VideoPage { controller: root.controller; actions: resourceActions }
+    }
+
+    Component {
+        id: flowchartTab
+        FlowchartPage { controller: root.controller; actions: resourceActions }
     }
 
     // A capture about a page that is no resource yet: make it first (the link and its title filled
@@ -410,6 +418,7 @@ ApplicationWindow {
         function onPdfRequested(resourceId, name, uri, page) { root.openPdf(resourceId, name, uri, page) }
         function onNotesRequested(resourceId, name, uri, page) { root.openNotes(resourceId, name, uri, page) }
         function onVideoRequested(resourceId, name, uri, page) { root.openVideo(resourceId, name, uri, page) }
+        function onFlowchartRequested(resourceId, name, uri) { root.openFlowchart(resourceId, name, uri) }
         function onCaptureReady(resourceId, kind, seconds) { root.openCaptureBox(resourceId, kind, seconds) }
         // a tag clicked in a todo or a note: the Knowledge graph, at that tag
         function onTagRequested(tagId) {

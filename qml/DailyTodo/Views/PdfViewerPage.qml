@@ -710,6 +710,67 @@ Item {
                 }
             }
 
+            // The flowcharts attached to this document, and a new one: a plain icon, with a count.
+            IconButton {
+                id: flowchartButton
+                visible: view.hasDocument               // a PDF or a presentation
+                property var charts: []
+                function refresh() { charts = view.resourceId >= 0 ? view.controller.flowchartsOf(view.resourceId) : [] }
+                Component.onCompleted: refresh()
+                Connections {
+                    target: view
+                    function onResourceIdChanged() { flowchartButton.refresh() }
+                }
+                Connections {
+                    target: view.controller
+                    function onAttachmentsChanged() { flowchartButton.refresh() }
+                    function onResourceViewChanged() { flowchartButton.refresh() }
+                }
+                height: 34
+                compact: true
+                iconSource: Theme.iconFlowchart
+                textColor: flowchartButton.hovered || flowchartMenu.visible ? Theme.text : Theme.textMuted
+                onClicked: flowchartMenu.visible ? flowchartMenu.close() : flowchartMenu.open()
+
+                PillLabel {                          // how many there are
+                    visible: flowchartButton.charts.length > 0
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    anchors.rightMargin: -6
+                    anchors.topMargin: -2
+                    height: 16
+                    width: Math.max(16, implicitWidth - 6)
+                    text: flowchartButton.charts.length
+                    tint: Theme.resourceFlowchart
+                    textColor: Theme.text
+                }
+                AppToolTip {
+                    text: "Flowcharts"
+                    shown: flowchartButton.hovered && !flowchartMenu.visible
+                }
+                AppMenu {
+                    id: flowchartMenu
+                    x: 0
+                    y: -height - 8
+                    Repeater {
+                        model: flowchartButton.charts
+                        AppMenuItem {
+                            required property var modelData
+                            text: modelData.name
+                            iconSource: Theme.iconFlowchart
+                            tint: modelData.missing ? Theme.textFaint : Theme.text
+                            onTriggered: view.controller.openResourceById(modelData.id)
+                        }
+                    }
+                    AppMenuSeparator { visible: flowchartButton.charts.length > 0 }
+                    AppMenuItem {
+                        text: "New flowchart"
+                        iconSource: Theme.iconPlus
+                        onTriggered: view.controller.createFlowchart(view.title + " - flowchart", view.resourceId)
+                    }
+                }
+            }
+
             // Export what was written about this PDF: a plain icon.
             IconButton {
                 id: exportButton

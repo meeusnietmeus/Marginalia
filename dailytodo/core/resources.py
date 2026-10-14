@@ -15,7 +15,7 @@ from urllib.parse import unquote, urlparse
 from .models import Resource, ResourceId, TagId
 from .video import is_youtube
 
-ResourceKind = Literal["pdf", "word", "excel", "powerpoint", "file", "web", "video", "link"]
+ResourceKind = Literal["pdf", "word", "excel", "powerpoint", "flowchart", "file", "web", "video", "link"]
 
 # How far along a resource is. Set by hand (the resource's menu, or the button at the end of a
 # document); the first is the start, and opening an unopened resource makes it "opened" by itself.
@@ -48,7 +48,11 @@ _FILE_KINDS: dict[str, ResourceKind] = {
     ".pptm": "powerpoint",
     ".pps": "powerpoint",
     ".ppsx": "powerpoint",
+    ".canvas": "flowchart",  # a JSON Canvas file, see core/flowchart.py
 }
+
+# The kinds a flowchart can be attached to: documents with pages.
+DOCUMENT_KINDS = ("pdf", "powerpoint")
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,6 +70,7 @@ class ResourceCard:
     created_at: datetime  # for sorting
     last_used_at: datetime  # for sorting
     status: str = DEFAULT_STATUS  # one of STATUSES
+    attached_to: ResourceId | None = None  # a flowchart: the document it is about
 
 
 def is_inside(path: str, folder: str) -> bool:
@@ -154,16 +159,16 @@ def describe(
         kind = _FILE_KINDS.get(filename[dot:].lower(), "file") if dot > 0 else "file"
         return ResourceCard(
             resource.id, name, uri, kind, title, True, not exists(uri), tags,
-            resource.created_at, resource.last_used_at, resource.status,
+            resource.created_at, resource.last_used_at, resource.status, resource.attached_to,
         )
     if urlparse(uri).scheme.lower() in ("http", "https"):
         return ResourceCard(
             resource.id, name, uri, "video" if is_youtube(uri) else "web", title, False, False, tags,
-            resource.created_at, resource.last_used_at, resource.status,
+            resource.created_at, resource.last_used_at, resource.status, resource.attached_to,
         )
     return ResourceCard(
         resource.id, name, uri, "link", title, False, False, tags,
-        resource.created_at, resource.last_used_at, resource.status,
+        resource.created_at, resource.last_used_at, resource.status, resource.attached_to,
     )
 
 # ---------------------------------------------------------------- library: filter and sort

@@ -80,6 +80,11 @@ class TodoRepository(ABC):
         resource becomes "opened", any other status stays)."""
 
     @abstractmethod
+    def set_resource_attachment(self, resource_id: ResourceId, attached_to: ResourceId | None) -> None:
+        """Attach a resource (a flowchart) to another one of its workspace (the document it is
+        about), or detach it with None. Deleting the document detaches it."""
+
+    @abstractmethod
     def set_resource_status(self, resource_id: ResourceId, status: str) -> None:
         """Set how far along a resource is (one of ``core.STATUSES``)."""
 

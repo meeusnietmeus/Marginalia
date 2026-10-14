@@ -168,6 +168,7 @@ QtObject {
     readonly property url iconShrink: Qt.resolvedUrl("icons/minimize-2.svg")
     readonly property url iconSort: Qt.resolvedUrl("icons/arrow-up-down.svg")
     readonly property url iconUndo: Qt.resolvedUrl("icons/undo-2.svg")
+    readonly property url iconRedo: Qt.resolvedUrl("icons/redo-2.svg")
     readonly property url iconTag: Qt.resolvedUrl("icons/tag.svg")
     readonly property url iconGrid: Qt.resolvedUrl("icons/layout-grid.svg")
     readonly property url iconPlay: Qt.resolvedUrl("icons/play.svg")
@@ -177,6 +178,9 @@ QtObject {
     readonly property url iconLink: Qt.resolvedUrl("icons/link.svg")
     readonly property url iconFlag: Qt.resolvedUrl("icons/flag.svg")
     readonly property url iconProgress: Qt.resolvedUrl("icons/progress.svg")
+    readonly property url iconFlowchart: Qt.resolvedUrl("icons/workflow.svg")
+    readonly property url iconSparkles: Qt.resolvedUrl("icons/sparkles.svg")
+    readonly property url iconPaste: Qt.resolvedUrl("icons/clipboard-paste.svg")
 
     // ---- library resource cards: icon + gradient colour per kind of resource ----
     readonly property color resourcePdf: "#c8504b"
@@ -186,7 +190,22 @@ QtObject {
     readonly property color resourcePowerpoint: "#d9663a"
     readonly property color resourceVideo: "#d4424a"
     readonly property color resourceLink: "#8b6fc9"
+    readonly property color resourceFlowchart: "#3f9e8f"
     readonly property color resourceFile: "#8a7660"
+
+    // ---- flowcharts: the colour presets of JSON Canvas ("1" red ... "6" purple) or "#rrggbb" ----
+    readonly property var flowchartPresets: ["1", "2", "3", "4", "5", "6"]
+    function flowchartColor(key) {
+        switch (key) {
+        case "1": return "#e0826a"
+        case "2": return "#e39a55"
+        case "3": return "#e0c152"
+        case "4": return "#8cc063"
+        case "5": return "#4fb3a9"
+        case "6": return "#9a8fe0"
+        default: return key && key.length === 7 && key[0] === "#" ? key : textFaint
+        }
+    }
 
     function resourceColor(kind) {
         switch (kind) {
@@ -197,6 +216,7 @@ QtObject {
         case "excel": return resourceExcel
         case "powerpoint": return resourcePowerpoint
         case "link": return resourceLink
+        case "flowchart": return resourceFlowchart
         default: return resourceFile
         }
     }
@@ -210,6 +230,7 @@ QtObject {
         case "excel": return Qt.resolvedUrl("icons/file-spreadsheet.svg")
         case "powerpoint": return Qt.resolvedUrl("icons/presentation.svg")
         case "link": return Qt.resolvedUrl("icons/link.svg")
+        case "flowchart": return iconFlowchart
         default: return Qt.resolvedUrl("icons/file.svg")
         }
     }
