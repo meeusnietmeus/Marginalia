@@ -7,8 +7,12 @@ write one (``AI_PROMPT``). What this app uses of it:
 * text nodes. The first line of ``text`` is the node's title (a leading ``#`` is dropped), the rest
   its body, which only shows on hover. File and link nodes become a node titled with their file or
   address; group nodes are left out.
-* edges between nodes, with an optional ``label``, sides and arrow ends.
-* one extra field on a node: ``page``, a page of the document the flowchart is attached to.
+* edges between nodes, with an optional ``label``, sides and arrow ends. One extra field:
+  ``list: true`` shows the edge's end as an item of a list under its start (stacked vertically,
+  joined by a bracket line) instead of with an arrow, like the cases of a ``switch``.
+* three extra fields on a node: ``page``, a page of the document the flowchart is attached to;
+  ``note: true``, a free-floating note (its title is optional, and its whole text always shows);
+  ``collapsed: true``, the nodes its arrows lead to (and theirs, on down) are hidden.
 
 Reading is forgiving, because a hand- or AI-written file is often incomplete: ``title`` / ``body``
 may be given instead of ``text``, edges may say ``from`` / ``to``, ids may be missing, and nodes
@@ -17,7 +21,7 @@ without a position are laid out left to right in the order of the arrows.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 FILE_SUFFIX = ".canvas"
 
@@ -46,6 +50,8 @@ class FlowNode:
     height: float = NODE_HEIGHT
     color: str = ""  # "" (none), a preset "1".."6" or "#rrggbb"
     page: int = 0  # a page of the attached document; 0: none
+    note: bool = False  # a free-floating note: the title may be empty, the body always shows
+    collapsed: bool = False  # what its arrows lead to is hidden
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,6 +65,7 @@ class FlowEdge:
     from_arrow: bool = False
     to_arrow: bool = True
     color: str = ""
+    list: bool = False  # its end is shown in a list under its start, not with an arrow
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,13 +78,14 @@ class Flowchart:
         return {
             "nodes": [
                 {"id": n.id, "title": n.title, "body": n.body, "x": n.x, "y": n.y,
-                 "width": n.width, "height": n.height, "color": n.color, "page": n.page}
+                 "width": n.width, "height": n.height, "color": n.color, "page": n.page,
+                 "note": n.note, "collapsed": n.collapsed}
                 for n in self.nodes
             ],
             "edges": [
                 {"id": e.id, "from": e.source, "to": e.target, "fromSide": e.from_side,
                  "toSide": e.to_side, "label": e.label, "fromArrow": e.from_arrow,
-                 "toArrow": e.to_arrow, "color": e.color}
+                 "toArrow": e.to_arrow, "color": e.color, "list": e.list}
                 for e in self.edges
             ],
         }
@@ -135,7 +143,14 @@ def join_text(title: str, body: str) -> str:
     return f"{head}\n\n{body}" if head else body
 
 
-def _node_title(raw: dict) -> tuple[str, str]:
+def split_note_text(text: str) -> tuple[str, str]:
+    """A note's ``text``: its title only when the first line is a heading, else all of it is the
+    body."""
+    text = text.strip()
+    return split_text(text) if text.startswith("#") else ("", text)
+
+
+def _node_title(raw: dict, note: bool) -> tuple[str, str]:
     kind = _text(raw.get("type")) or "text"
     if "title" in raw or "body" in raw:  # the friendlier form
         return _text(raw.get("title")), _text(raw.get("body"))
@@ -145,7 +160,8 @@ def _node_title(raw: dict) -> tuple[str, str]:
     if kind == "link":
         url = _text(raw.get("url"))
         return url, ""
-    return split_text(raw.get("text") if isinstance(raw.get("text"), str) else "")
+    text = raw.get("text") if isinstance(raw.get("text"), str) else ""
+    return split_note_text(text) if note else split_text(text)
 
 
 def parse_flowchart(text: str) -> Flowchart:
@@ -171,11 +187,14 @@ def parse_flowchart(text: str) -> Flowchart:
     for index, raw in enumerate(raw_nodes):
         if not isinstance(raw, dict) or _text(raw.get("type")) == "group":
             continue
+        note = raw.get("note") is True
+        title, body = _node_title(raw, note)
+        if note and not title and not body:
+            continue  # an empty note is nothing
         node_id = _text(str(raw["id"])) if raw.get("id") not in (None, "") else ""
         if not node_id or node_id in taken:
             node_id = _free_id("n", index, taken)
         taken.add(node_id)
-        title, body = _node_title(raw)
         x, y = _number(raw.get("x"), None), _number(raw.get("y"), None)
         if x is None or y is None:
             unplaced.add(node_id)
@@ -183,7 +202,7 @@ def parse_flowchart(text: str) -> Flowchart:
         nodes.append(
             FlowNode(
                 node_id,
-                title or "Untitled",
+                title or ("" if note else "Untitled"),
                 body,
                 x or 0,
                 y or 0,
@@ -191,6 +210,8 @@ def parse_flowchart(text: str) -> Flowchart:
                 max(30.0, _number(raw.get("height"), NODE_HEIGHT) or NODE_HEIGHT),
                 _color(raw.get("color")),
                 max(0, int(page)),
+                note,
+                raw.get("collapsed") is True,
             )
         )
 
@@ -220,6 +241,7 @@ def parse_flowchart(text: str) -> Flowchart:
                 _text(raw.get("fromEnd")) == "arrow",
                 _text(raw.get("toEnd")) != "none",
                 _color(raw.get("color")),
+                raw.get("list") is True,
             )
         )
 
@@ -301,7 +323,7 @@ def _place(nodes: list[FlowNode], edges: list[FlowEdge], unplaced: set[str]) -> 
     for n in nodes:
         if n.id in spots:
             x, y = spots[n.id]
-            n = FlowNode(n.id, n.title, n.body, x, y, n.width, n.height, n.color, n.page)
+            n = replace(n, x=x, y=y)
         result.append(n)
     return result
 
@@ -312,14 +334,16 @@ def flowchart_from_view(data: dict) -> Flowchart:
     nodes = [
         {"id": n.get("id"), "title": n.get("title", ""), "body": n.get("body", ""),
          "x": n.get("x"), "y": n.get("y"), "width": n.get("width"), "height": n.get("height"),
-         "color": n.get("color"), "page": n.get("page")}
+         "color": n.get("color"), "page": n.get("page"), "note": n.get("note") is True,
+         "collapsed": n.get("collapsed") is True}
         for n in data.get("nodes") or [] if isinstance(n, dict)
     ]
     edges = [
         {"id": e.get("id"), "fromNode": e.get("from"), "toNode": e.get("to"),
          "fromSide": e.get("fromSide"), "toSide": e.get("toSide"), "label": e.get("label"),
          "fromEnd": "arrow" if e.get("fromArrow") else "none",
-         "toEnd": "none" if e.get("toArrow") is False else "arrow", "color": e.get("color")}
+         "toEnd": "none" if e.get("toArrow") is False else "arrow", "color": e.get("color"),
+         "list": e.get("list") is True}
         for e in data.get("edges") or [] if isinstance(e, dict)
     ]
     return parse_flowchart(json.dumps({"nodes": nodes, "edges": edges}))
@@ -331,7 +355,8 @@ def _round(value: float) -> int | float:
 
 
 def dump_flowchart(chart: Flowchart) -> str:
-    """The ``.canvas`` file's text: standard JSON Canvas, plus ``page`` on nodes that have one."""
+    """The ``.canvas`` file's text: standard JSON Canvas, plus ``page``, ``note`` and
+    ``collapsed`` on the nodes that have them."""
     nodes = []
     for n in chart.nodes:
         node = {"id": n.id, "type": "text", "text": join_text(n.title, n.body),
@@ -341,6 +366,10 @@ def dump_flowchart(chart: Flowchart) -> str:
             node["color"] = n.color
         if n.page > 0:
             node["page"] = n.page
+        if n.note:
+            node["note"] = True
+        if n.collapsed:
+            node["collapsed"] = True
         nodes.append(node)
     edges = []
     for e in chart.edges:
@@ -357,6 +386,8 @@ def dump_flowchart(chart: Flowchart) -> str:
             edge["color"] = e.color
         if e.label:
             edge["label"] = e.label
+        if e.list:
+            edge["list"] = True
         edges.append(edge)
     return json.dumps({"nodes": nodes, "edges": edges}, indent=2, ensure_ascii=False) + "\n"
 
@@ -382,10 +413,13 @@ Rules:
 start it with "# "); after an empty line comes the explanation, which is shown when hovering \
 over the node. Markdown is allowed in the explanation.
 - "page" (optional) is the page or slide number of the document where the point is made.
+- A side remark that is no step of its own can be a note: {"id": "n1", "type": "text", "note": true, "text": "The remark itself."}. A note has no title and no arrows, and is always shown in full; use them sparingly.
 - "color" (optional) groups related nodes: "1" red, "2" orange, "3" yellow, "4" green, \
 "5" cyan, "6" purple.
 - An edge is an arrow from one node to the next; "label" (optional) says how they relate, in a \
 word or two.
+- When a point splits into cases, options or examples, put "list": true on the edges from it to \
+each of them: they are then shown as a list under it instead of with arrows.
 - Leave out "x", "y", "width" and "height": the nodes are laid out automatically, from left to \
 right in the direction of the arrows.
 - Ids are short and unique; every "fromNode" and "toNode" is the id of a node.

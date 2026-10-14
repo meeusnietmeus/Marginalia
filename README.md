@@ -84,21 +84,31 @@ and attach it in the flowchart's Edit mode.
 
 The file is [JSON Canvas](https://jsoncanvas.org), the open format of Obsidian's canvases, so it
 opens there too. A node's `text` is its title on the first line (`# Title`) and, after that, the
-body that only shows on hover; one field is added: `page`, a page of the attached document (click
-the "p. 12" on the node to open the document there). Reading is forgiving, for files written by
-hand or by an AI: `title`/`body` instead of `text`, `from`/`to` on edges, and nodes without a
-position are laid out left to right along the arrows. See `core/flowchart.py`.
+body that only shows on hover. Three fields are added: `page`, a page of the attached document
+(click the "p. 12" on the node to open the document there); `note: true`, a free-floating note
+(its title is optional, its text always shows, on a lighter card; a note with neither is dropped);
+and `collapsed: true`, a node whose arrows' targets (and theirs, on down) are folded away. On an
+edge, `list: true` shows its end as an item of a list under its start (stacked, joined by a bracket
+line, like the cases of a `switch`) instead of with an arrow; list items are laid out by themselves.
+Reading is forgiving, for files written by hand or by an AI: `title`/`body` instead of `text`,
+`from`/`to` on edges, and nodes without a position are laid out left to right along the arrows.
+See `core/flowchart.py`.
 
 To have an AI make one: the sparkles menu (or the buttons on an empty chart) copies a prompt that
 explains the format; give it to a chat together with the document, copy the answer, and use
 "Replace with the AI's answer (paste)".
 
-The tab has two modes. **View**: drag the grid to move around, scroll to zoom, hover a node to read
-its body. **Edit**, also: double-click the grid for a node, drag nodes around (they snap to the
-grid), drag from one of the green dots on a node's sides to another node for an arrow (or to empty
-space for a new, connected node), click a node or arrow to change it in the panel on the right, Del
-removes, Ctrl+Z / Ctrl+Shift+Z undo and redo. Every change is written to the file a moment later;
-the file is read again whenever the tab is shown, so changes made elsewhere come through.
+The tab has two modes. **View**: drag with the middle mouse button to move around, scroll to
+zoom, hover a node to read its body; under a node with arrows going out, a button folds away
+what they lead to (and shows it again; right-click it to show only the next level, or everything). **Edit**, also: double-click the grid for a node ("New
+note" for a note), drag nodes around (they snap to the grid), drag from one of the green dots on a
+node's sides to another node for an arrow (or to empty space for a new, connected node), drag a
+box on the grid or Ctrl+click to select several (drag one to move them all; **Level** lines up
+their tops; Del removes them), click a node or arrow to change it in the panel on the right (an
+arrow can be switched to a list item there, or all of a node's children at once; drag a list item
+to reorder its list),
+Ctrl+Z / Ctrl+Shift+Z undo and redo. Every change is written to the file a moment later; the file
+is read again whenever the tab is shown, so changes made elsewhere come through.
 
 ## Notes from YouTube (browser extension)
 
