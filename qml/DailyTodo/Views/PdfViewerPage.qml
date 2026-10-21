@@ -302,6 +302,14 @@ Item {
     property string searchText: ""
     property var currentMatchRects: []              // where the current match is, on its page
     property int searchCount: 0                      // matches (the model's count does not notify)
+    // "Whole word": the model only finds text, so the matches that sit inside a longer word are left
+    // out here. `okRows` are the model rows that count, `okOnPage` says per page (0-based) and
+    // index on the page whether a match counts. Both are worked out a moment after the model settles.
+    property bool wholeWord: false
+    property var okRows: []
+    property var okOnPage: ({})
+    readonly property int currentMatchNumber: !wholeWord ? searchModel.currentResult + 1
+                                                         : okRows.indexOf(searchModel.currentResult) + 1
 
     PdfSearchModel {
         id: searchModel
@@ -310,9 +318,49 @@ Item {
         onCurrentResultChanged: { view.showSearchResult(); searchTick.restart() }
         // a new search starts at its first match
         onSearchStringChanged: if (searchString !== "") currentResult = 0
-        onRowsInserted: { view.searchCount = rowCount(); searchTick.restart() }
-        onRowsRemoved: { view.searchCount = rowCount(); searchTick.restart() }
-        onModelReset: { view.searchCount = rowCount(); searchTick.restart() }
+        onRowsInserted: { view.searchCount = view.wholeWord ? view.okRows.length : rowCount(); searchTick.restart() }
+        onRowsRemoved: { view.searchCount = view.wholeWord ? view.okRows.length : rowCount(); searchTick.restart() }
+        onModelReset: { view.searchCount = view.wholeWord ? view.okRows.length : rowCount(); searchTick.restart() }
+    }
+    // One invisible item per match, only to read what stands before and after it.
+    Repeater {
+        id: searchRows
+        model: view.searchOpen && view.wholeWord ? searchModel : null
+        Item {
+            required property int page
+            required property int indexOnPage
+            required property string contextBefore
+            required property string contextAfter
+            // a letter (any script that has cases), a digit or an underscore is part of a word
+            function isWordChar(c) { return c !== "" && (c.toLowerCase() !== c.toUpperCase() || /[0-9_]/.test(c)) }
+            readonly property bool whole: !isWordChar(contextBefore.slice(-1)) && !isWordChar(contextAfter.charAt(0))
+        }
+    }
+    function updateWholeWord() {
+        const rows = []
+        const perPage = {}
+        if (wholeWord) {
+            for (let i = 0; i < searchRows.count; i++) {
+                const item = searchRows.itemAt(i)
+                if (!item) continue
+                if (item.whole) rows.push(i)
+                if (perPage[item.page] === undefined) perPage[item.page] = []
+                perPage[item.page][item.indexOnPage] = item.whole
+            }
+        }
+        okRows = rows
+        okOnPage = perPage
+        if (!wholeWord) return
+        searchCount = rows.length
+        // the current match must be one that counts (also at the start of a new search)
+        if (rows.length > 0 && rows.indexOf(searchModel.currentResult) < 0) {
+            const next = rows.find(r => r >= searchModel.currentResult)
+            searchModel.currentResult = next !== undefined ? next : rows[0]
+        }
+    }
+    onWholeWordChanged: {
+        if (!wholeWord) searchCount = searchModel.rowCount()
+        searchTick.restart()
     }
     // The pages ask the model where the matches are a moment after it has settled (it finds them
     // page by page, and the outlines of a page are only there after its rows are).
@@ -321,6 +369,7 @@ Item {
         id: searchTick
         interval: 120
         onTriggered: {
+            view.updateWholeWord()
             view.currentMatchRects = view.searchCount > 0 ? view.rectsOf(searchModel.currentResultBoundingPolygons) : []
             view.searchRevision++
         }
@@ -341,7 +390,13 @@ Item {
     function searchNext(step) {
         const n = view.searchCount
         if (n === 0) return
-        searchModel.currentResult = (searchModel.currentResult + step + n) % n
+        if (wholeWord) {
+            const at = okRows.indexOf(searchModel.currentResult)
+            const from = at >= 0 ? at : (step > 0 ? -1 : 0)
+            searchModel.currentResult = okRows[(from + step + n) % n]
+        } else {
+            searchModel.currentResult = (searchModel.currentResult + step + n) % n
+        }
         showSearchResult()
     }
     // Scroll so that the current match is in view (a third of the way down the viewport).
@@ -719,61 +774,6 @@ Item {
             }
         }
     }
-    // ----------------------------------------------------------------- centre column
-    // The PDF stands in front of the side columns: a raised panel behind it, throwing a wide
-    // shadow onto them, and drawn above them (the side columns are at z 0).
-    Item {
-        id: stage
-        visible: view.hasDocument
-        z: 1
-        width: view.centerWidth
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
-
-        RectangularShadow {
-            anchors.fill: parent
-            blur: 56
-            spread: 4
-            color: Qt.rgba(0, 0, 0, 0.55)
-        }
-        Rectangle {
-            anchors.fill: parent
-            gradient: Gradient {
-                orientation: Gradient.Horizontal
-                GradientStop { position: 0; color: Theme.panelRaised }
-                GradientStop { position: 0.5; color: Theme.panel }
-                GradientStop { position: 1; color: Theme.panelRaised }
-            }
-            // light edges, like the top edge of a Surface
-            Rectangle { width: 1; height: parent.height; color: Theme.hairlineStrong }
-            Rectangle { x: parent.width - 1; width: 1; height: parent.height; color: Theme.hairlineStrong }
-        }
-    }
-    ListView {
-        id: pages
-        visible: view.hasDocument
-        z: 2
-        width: view.centerWidth
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
-        clip: true                                   // zoomed pages never leave the column
-        model: doc.pageCount
-        boundsBehavior: Flickable.StopAtBounds
-        flickableDirection: Flickable.HorizontalAndVerticalFlick
-        contentWidth: width * view.zoom
-        onContentYChanged: view.updateCurrentPage()
-        onHeightChanged: view.updateCurrentPage()
-
-        ScrollBar.vertical: AppScrollBar { z: 6 }
-        ScrollBar.horizontal: AppScrollBar { z: 6 }      // only appears when zoomed in
-
-        // After the last page: you've reached the end, so offer to mark the document as finished.
-        footer: Item {
-            width: pages.contentWidth
-            height: 150
-
     // ------------------------------------------------------- page and view controls
     // Floats over the top of the PDF: out of sight until the pointer comes near the top edge (a
     // document without pages to show, the notes tab of a web link, keeps it in view: that is where
@@ -919,6 +919,61 @@ Item {
             }
         }
     }
+
+    // ----------------------------------------------------------------- centre column
+    // The PDF stands in front of the side columns: a raised panel behind it, throwing a wide
+    // shadow onto them, and drawn above them (the side columns are at z 0).
+    Item {
+        id: stage
+        visible: view.hasDocument
+        z: 1
+        width: view.centerWidth
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+
+        RectangularShadow {
+            anchors.fill: parent
+            blur: 56
+            spread: 4
+            color: Qt.rgba(0, 0, 0, 0.55)
+        }
+        Rectangle {
+            anchors.fill: parent
+            gradient: Gradient {
+                orientation: Gradient.Horizontal
+                GradientStop { position: 0; color: Theme.panelRaised }
+                GradientStop { position: 0.5; color: Theme.panel }
+                GradientStop { position: 1; color: Theme.panelRaised }
+            }
+            // light edges, like the top edge of a Surface
+            Rectangle { width: 1; height: parent.height; color: Theme.hairlineStrong }
+            Rectangle { x: parent.width - 1; width: 1; height: parent.height; color: Theme.hairlineStrong }
+        }
+    }
+    ListView {
+        id: pages
+        visible: view.hasDocument
+        z: 2
+        width: view.centerWidth
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        clip: true                                   // zoomed pages never leave the column
+        model: doc.pageCount
+        boundsBehavior: Flickable.StopAtBounds
+        flickableDirection: Flickable.HorizontalAndVerticalFlick
+        contentWidth: width * view.zoom
+        onContentYChanged: view.updateCurrentPage()
+        onHeightChanged: view.updateCurrentPage()
+
+        ScrollBar.vertical: AppScrollBar { z: 6 }
+        ScrollBar.horizontal: AppScrollBar { z: 6 }      // only appears when zoomed in
+
+        // After the last page: you've reached the end, so offer to mark the document as finished.
+        footer: Item {
+            width: pages.contentWidth
+            height: 150
 
             Column {
                 x: Math.min(pages.contentWidth, pages.width) / 2 - width / 2
@@ -1149,8 +1204,13 @@ Item {
                     z: 2
                     property var rects: []
                     function refresh() {
-                        rects = view.searchOpen && view.searchCount > 0
-                                ? view.rectsOf(searchModel.boundingPolygonsOnPage(pageItem.index)) : []
+                        if (!view.searchOpen || view.searchCount === 0) { rects = []; return }
+                        let polygons = searchModel.boundingPolygonsOnPage(pageItem.index)
+                        const ok = view.wholeWord ? view.okOnPage[pageItem.index] : undefined
+                        // (one polygon per match; if they don't line up, show them all)
+                        if (ok !== undefined && ok.length === polygons.length)
+                            polygons = polygons.filter((p, i) => ok[i])
+                        rects = view.rectsOf(polygons)
                     }
                     Connections {
                         target: searchModel
@@ -1668,11 +1728,20 @@ Item {
                     }
                 }
             }
+            AppButton {
+                id: wholeWordButton
+                compact: true
+                text: "Whole word"
+                font.pixelSize: 12
+                active: view.wholeWord
+                onClicked: { view.wholeWord = !view.wholeWord; searchField.forceActiveFocus() }
+                AppToolTip { text: "Only match whole words"; shown: wholeWordButton.hovered }
+            }
             // "3 / 17" (the first match is the current one), or that there is none
             CapsLabel {
                 text: view.searchText === "" ? ""
                       : view.searchCount === 0 ? "No results"
-                      : (searchModel.currentResult + 1) + " / " + view.searchCount
+                      : view.currentMatchNumber + " / " + view.searchCount
                 color: view.searchText !== "" && view.searchCount === 0 ? Theme.danger : Theme.textMuted
             }
             IconButton {
