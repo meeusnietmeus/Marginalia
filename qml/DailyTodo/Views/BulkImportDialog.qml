@@ -217,7 +217,7 @@ AppDialog {
                 required property bool duplicate
 
                 width: list.width - 10
-                height: 52
+                height: 68
                 opacity: duplicate ? 0.5 : 1
 
                 QuietCard { anchors.fill: parent; lit: nameField.activeFocus }
@@ -237,20 +237,37 @@ AppDialog {
                     anchors.rightMargin: 6
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: 1
-                    TextInput {
-                        id: nameField
+                    // the name it will get: an inset field, so it reads as something to change
+                    Item {
                         Layout.fillWidth: true
-                        text: row.name
-                        readOnly: row.duplicate
-                        font.pixelSize: 13
-                        color: Theme.text
-                        selectionColor: Theme.accent
-                        selectedTextColor: Theme.accentText
-                        selectByMouse: true
-                        clip: true
-                        onTextEdited: rows.setProperty(row.index, "name", text)
-                        // an empty name would be refused: go back to the suggestion
-                        onActiveFocusChanged: if (!activeFocus && text.trim() === "") text = controller.suggestName(row.path)
+                        implicitHeight: 28
+                        Well {
+                            anchors.fill: parent
+                            radius: 9
+                            focused: nameField.activeFocus
+                            visible: !row.duplicate
+                        }
+                        TextInput {
+                            id: nameField
+                            anchors.fill: parent
+                            anchors.leftMargin: 10
+                            anchors.rightMargin: 10
+                            verticalAlignment: TextInput.AlignVCenter
+                            text: row.name
+                            readOnly: row.duplicate
+                            font.pixelSize: 13
+                            color: Theme.text
+                            selectionColor: Theme.accent
+                            selectedTextColor: Theme.accentText
+                            selectByMouse: true
+                            clip: true
+                            onTextEdited: rows.setProperty(row.index, "name", text)
+                            // an empty name would be refused: go back to the suggestion
+                            onActiveFocusChanged: if (!activeFocus && text.trim() === "") {
+                                text = controller.suggestName(row.path)
+                                rows.setProperty(row.index, "name", text)
+                            }
+                        }
                     }
                     Text {
                         Layout.fillWidth: true
