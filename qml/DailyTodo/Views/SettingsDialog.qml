@@ -4,15 +4,19 @@ import QtQuick.Layouts
 import DailyTodo.Style
 import DailyTodo.Controls
 
-// Modal settings window: the PDF scroll speed, a help link and the export action.
+// Modal settings window: the PDF scroll speed, backups, a help link and the backup action.
 AppDialog {
     id: dialog
 
     property bool showExport: true
     property real pdfScrollSpeed: 1.5
+    property bool backupOnClose: false
+    property int backupKeep: 10               // 0: keep them all
 
     signal exportClicked()
     signal pdfScrollSpeedPicked(real speed)
+    signal backupOnCloseToggled(bool on)
+    signal backupKeepPicked(int keep)
 
     width: Math.min(360, parent.width - 40)
 
@@ -85,6 +89,48 @@ AppDialog {
             }
         }
 
+        // Backups: made into the workspace folder's .backups folder.
+        ColumnLayout {
+            spacing: 10
+            Layout.fillWidth: true
+
+            Label {
+                text: "Backups"
+                font.pixelSize: 12
+                color: Theme.textMuted
+            }
+            RowLayout {
+                spacing: 8
+                AppCheckBox {
+                    checked: dialog.backupOnClose
+                    onToggled: dialog.backupOnCloseToggled(checked)
+                }
+                Label {
+                    text: "Back up every time the app closes"
+                    font.pixelSize: 13
+                    color: Theme.text
+                    ClickHandler { onTapped: dialog.backupOnCloseToggled(!dialog.backupOnClose) }
+                }
+            }
+            RowLayout {
+                spacing: 10
+                NumberField {
+                    value: dialog.backupKeep
+                    from: 0
+                    to: 999
+                    onValueModified: (value) => dialog.backupKeepPicked(value)
+                }
+                Label {
+                    text: dialog.backupKeep === 0 ? "backups to keep: all of them"
+                                                  : "backups to keep (the oldest is removed first)"
+                    font.pixelSize: 13
+                    color: Theme.text
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
+                }
+            }
+        }
+
         // Help: where to look things up.
         ColumnLayout {
             spacing: 6
@@ -116,7 +162,7 @@ AppDialog {
 
         AppButton {
             visible: dialog.showExport
-            text: "Export"
+            text: "Back up now"
             filled: true
             Layout.alignment: Qt.AlignLeft
             onClicked: dialog.exportClicked()

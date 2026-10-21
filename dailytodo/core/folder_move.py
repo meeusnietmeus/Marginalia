@@ -48,10 +48,17 @@ def folder_problem(old: str, new: str) -> str:
     return ""
 
 
+BACKUPS = ".backups"  # inside the workspace folder (see TodoController.exportBackup)
+
+
 def plan_folder_move(
-    old: str, new: str, resources: Iterable[tuple[int, str, bool, str]]
+    old: str,
+    new: str,
+    resources: Iterable[tuple[int, str, bool, str]],
+    backups: Iterable[str] = (),
 ) -> FolderMovePlan:
-    """``resources``: (id, link, is a local file, kind) of the workspace's resources."""
+    """``resources``: (id, link, is a local file, kind) of the workspace's resources. ``backups``:
+    the files in the old folder's backup folder, which go along (they belong to no resource)."""
     plan = FolderMovePlan()
     seen: set[str] = set()
 
@@ -70,4 +77,6 @@ def plan_folder_move(
             pdf = os.path.join(old, pdf_file_name(uri))
             if os.path.isfile(pdf):
                 add(resource_id, pdf, False)
+    for backup in backups:
+        add(-1, backup, False)
     return plan

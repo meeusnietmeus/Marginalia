@@ -139,7 +139,12 @@ AppDialog {
                                ? " (" + dialog.moveInfo.missing + " link"
                                  + (dialog.moveInfo.missing === 1 ? "" : "s") + " whose file is missing only change)"
                                : "")
-                            + ". Resources outside the folder stay where they are."
+                            + "."
+                            + (dialog.moveInfo.backups > 0
+                               ? " The " + dialog.moveInfo.backups + " backup"
+                                 + (dialog.moveInfo.backups === 1 ? "" : "s") + " in .backups move too."
+                               : "")
+                            + " Resources outside the folder stay where they are."
                           : (dialog.moveInfo.error || "")
                     font.pixelSize: 12
                     color: dialog.moveInfo.ok === true ? Theme.textMuted : Theme.danger

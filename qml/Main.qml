@@ -438,6 +438,10 @@ ApplicationWindow {
         showExport: root.controller.canBackup
         pdfScrollSpeed: root.controller.pdfScrollSpeed
         onPdfScrollSpeedPicked: (speed) => root.controller.setPdfScrollSpeed(speed)
+        backupOnClose: root.controller.backupOnClose
+        backupKeep: root.controller.backupKeep
+        onBackupOnCloseToggled: (on) => root.controller.setBackupOnClose(on)
+        onBackupKeepPicked: (keep) => root.controller.setBackupKeep(keep)
         onExportClicked: root.controller.exportBackup()
     }
     // ---- "Deleted ... Undo" toasts (bottom right, newest at the bottom) ----

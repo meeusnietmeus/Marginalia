@@ -1,5 +1,5 @@
 """Persistence. Nothing in this package may import Qt."""
-from .backup import export_backup
+from .backup import export_backup, list_backups, prune_backups
 from .base import BackupCapable, RepositoryError, TodoRepository
 from .client_state import ClientState, ClientStateError
 from .factory import build_repository
@@ -15,5 +15,7 @@ __all__ = [
     "TodoRepository",
     "build_repository",
     "export_backup",
+    "list_backups",
+    "prune_backups",
     "write_text_unique",
 ]
