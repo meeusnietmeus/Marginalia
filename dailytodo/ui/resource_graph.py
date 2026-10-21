@@ -1,4 +1,4 @@
-"""State of the "Knowledge graph" page: every resource of the workspace and the links between them.
+"""State of the "Resource graph" page: every resource of the workspace and the links between them.
 
 The data is read here, on the main thread (one query for the links, one pass over the cards); the
 layout, which can take a while for a big workspace, is computed on a worker thread. The page shows
@@ -15,7 +15,7 @@ from PySide6.QtCore import Property, QObject, QTimer, Signal, Slot
 from ..core import (
     GraphResource,
     GraphTag,
-    KnowledgeGraph,
+    ResourceGraph,
     ResourceCard,
     ResourceId,
     Tag,
@@ -28,11 +28,11 @@ from ..storage import RepositoryError, TodoRepository
 LOADING_DELAY_MS = 150
 
 
-class KnowledgeGraphModel(QObject):
+class ResourceGraphModel(QObject):
     error = Signal(str)
     changed = Signal()
     loadingChanged = Signal()
-    _computed = Signal(int, object)  # (build number, KnowledgeGraph | Exception), from the worker
+    _computed = Signal(int, object)  # (build number, ResourceGraph | Exception), from the worker
 
     def __init__(
         self,
@@ -42,7 +42,7 @@ class KnowledgeGraphModel(QObject):
         tags: Callable[[], Sequence[Tag]],
         parent: QObject | None = None,
         delay_ms: int = LOADING_DELAY_MS,
-        compute: Callable[..., KnowledgeGraph] = build_graph,
+        compute: Callable[..., ResourceGraph] = build_graph,
     ):
         super().__init__(parent)
         self._repo = repo
@@ -50,7 +50,7 @@ class KnowledgeGraphModel(QObject):
         self._cards = cards
         self._tags = tags
         self._compute = compute
-        self._graph: KnowledgeGraph | None = None
+        self._graph: ResourceGraph | None = None
         self._input = None  # what the current graph was built from
         self._build = 0  # number of the newest build; older answers are ignored
         self._computing = False

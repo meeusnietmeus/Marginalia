@@ -18,10 +18,10 @@ from .models import (
     WorkspaceId,
 )
 from .notes import with_question_mark
-from .knowledge_graph import (
+from .resource_graph import (
     GraphResource,
     GraphTag,
-    KnowledgeGraph,
+    ResourceGraph,
     UNTAGGED,
     build_graph,
     find_clusters,
@@ -175,7 +175,7 @@ __all__ = [
     "time_ago",
     "GraphResource",
     "GraphTag",
-    "KnowledgeGraph",
+    "ResourceGraph",
     "UNTAGGED",
     "build_graph",
     "find_clusters",

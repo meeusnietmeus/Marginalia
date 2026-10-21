@@ -1,4 +1,4 @@
-"""The knowledge graph of a workspace: every resource, the links between them, and where to draw
+"""The resource graph of a workspace: every resource, the links between them, and where to draw
 each one. No Qt and no storage in here, so it is plain unit-testable logic.
 
 * Every resource is drawn, linked or not, in the region of its tag: the most specific one it has
@@ -105,7 +105,7 @@ class Area:
 
 
 @dataclass(frozen=True, slots=True)
-class KnowledgeGraph:
+class ResourceGraph:
     nodes: tuple[GraphNode, ...]
     edges: tuple[GraphEdge, ...]
     regions: tuple[Region, ...]  # outer ones before the ones inside them
@@ -362,7 +362,7 @@ def build_graph(
     resources: Sequence[GraphResource],
     links: Iterable[tuple[int, int]],
     tags: Sequence[GraphTag] = (),
-) -> KnowledgeGraph:
+) -> ResourceGraph:
     """The whole picture: every resource in the region of its tag, regions nested like the tags."""
     by_id = {r.id: r for r in resources}
     widths = {r.id: node_width(r.name) for r in resources}
@@ -484,7 +484,7 @@ def build_graph(
         return " › ".join(reversed(names))
 
     areas = tuple(Area(t.id, t.name, path(t), depth[t.id], color_of[t.id], tagged.get(t.id, 0)) for t in order)
-    return KnowledgeGraph(
+    return ResourceGraph(
         tuple(sorted(nodes, key=lambda n: n.id)),
         tuple(edges[k] for k in sorted(edges)),
         tuple(regions),

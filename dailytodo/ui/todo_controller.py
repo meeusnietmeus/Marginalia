@@ -90,7 +90,7 @@ from ..storage import (
 from .backlog_list_model import BacklogListModel, BacklogTodo
 from .day_list_model import DayListModel
 from .notes_session import NotesSession
-from .knowledge_graph import KnowledgeGraphModel
+from .resource_graph import ResourceGraphModel
 from .open_questions import OpenQuestions
 from .resource_list_model import ResourceListModel
 from .tag_list_model import TagListModel
@@ -148,7 +148,7 @@ class TodoController(QObject):
     resourceRemoved = Signal(int)  # a resource is gone for good: close its PDF tab
     pdfScrollSpeedChanged = Signal()
     recentChanged = Signal()  # what was opened last, or where a PDF was left, changed
-    tagRequested = Signal(int)  # a tag was clicked in some text: show it (the Knowledge graph)
+    tagRequested = Signal(int)  # a tag was clicked in some text: show it (the Resource graph)
     # A capture from outside (the browser extension, see ``handleLink``):
     captureReady = Signal(int, str, int)  # (resource id, note|question, seconds): its tab is open, open the box
     captureNeedsResource = Signal(str, str, str, int)  # (link, its title, note|question, seconds): nothing has that link yet
@@ -205,14 +205,14 @@ class TodoController(QObject):
             to_storage=self._to_storage,
         )
         self._open_questions.error.connect(self.notify)
-        self._knowledge_graph = KnowledgeGraphModel(
+        self._resource_graph = ResourceGraphModel(
             repo,
             lambda: self._workspace_id,
             lambda: self._cards,
             lambda: self._all_tags,
             parent=self,
         )
-        self._knowledge_graph.error.connect(self.notify)
+        self._resource_graph.error.connect(self.notify)
         self._resource_names: dict[int, str] = {}  # for inline references in todo text
         self._tag_names: dict[int, str] = {}
         self._all_tags: list[Tag] = []  # with their parents (the model only has the tree order)
@@ -663,8 +663,8 @@ class TodoController(QObject):
         self._refresh_resources()
 
     @Property(QObject, constant=True)
-    def knowledgeGraph(self) -> KnowledgeGraphModel:
-        return self._knowledge_graph
+    def resourceGraph(self) -> ResourceGraphModel:
+        return self._resource_graph
 
     @Property(QObject, constant=True)
     def openQuestions(self) -> OpenQuestions:
@@ -1546,7 +1546,7 @@ class TodoController(QObject):
     @Slot(str)
     def openLink(self, link: str) -> None:
         """A link in note text: ``resource:<id>`` opens that resource, ``tag:<id>`` shows that tag
-        (``tagRequested``: the Knowledge graph goes to it), anything else is a web address."""
+        (``tagRequested``: the Resource graph goes to it), anything else is a web address."""
         if link.startswith("resource:") and link[9:].isdigit():
             self.openResourceById(int(link[9:]))
         elif link.startswith("tag:") and link[4:].isdigit():

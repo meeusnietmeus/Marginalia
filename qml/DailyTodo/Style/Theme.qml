@@ -46,7 +46,7 @@ QtObject {
     function highlightBar(key) { return key === "none" ? textFaint : highlightColor(key) }
     readonly property color selection: "#4d99ff"
 
-    // ---- knowledge graph: one colour per area (cycles when there are more areas) ----
+    // ---- resource graph: one colour per area (cycles when there are more areas) ----
     readonly property var areaColors: ["#e0826a", "#e0b152", "#8cc063", "#4fb3a9", "#5fa8d9",
                                        "#9a8fe0", "#c07bd0", "#e07ba5", "#b59a6a", "#7fc7c7"]
     function areaColor(index) { return index < 0 ? textFaint : areaColors[index % areaColors.length] }

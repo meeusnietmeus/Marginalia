@@ -29,7 +29,7 @@ TagDialog 1.0 TagDialog.qml
 SectionList 1.0 SectionList.qml
 ResourceGraph 1.0 ResourceGraph.qml
 ConnectionsPanel 1.0 ConnectionsPanel.qml
-KnowledgeGraphPage 1.0 KnowledgeGraphPage.qml
+ResourceGraphPage 1.0 ResourceGraphPage.qml
 VideoPage 1.0 VideoPage.qml
 FlowchartPage 1.0 FlowchartPage.qml
 PresentationInfoDialog 1.0 PresentationInfoDialog.qml

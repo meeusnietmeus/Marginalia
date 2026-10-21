@@ -6,7 +6,7 @@ import QtQuick.Layouts
 import DailyTodo.Style
 import DailyTodo.Controls
 
-// "Knowledge graph": every resource of the workspace, in the region of its tag (a sub-tag's region
+// "Resource graph": every resource of the workspace, in the region of its tag (a sub-tag's region
 // inside its tag's), and the links between them (a note of one mentions the other).
 //   top left      the title and what is in it
 //   top right     the legend: every tag, with a filter; click one to go to its region
@@ -19,7 +19,7 @@ Item {
 
     required property var controller
     required property var actions            // the resource menu and dialogs (ResourceActions)
-    readonly property var graph: controller.knowledgeGraph
+    readonly property var graph: controller.resourceGraph
 
     // the view: screen = world * zoom + pan
     property real zoom: 1
@@ -454,7 +454,7 @@ Item {
         x: 22
         y: 14
         spacing: 2
-        SectionTitle { text: "Knowledge graph" }
+        SectionTitle { text: "Resource graph" }
         CapsLabel {
             text: page.graph.nodes.length + (page.graph.nodes.length === 1 ? " resource" : " resources")
                   + "  ·  " + page.graph.edges.length + (page.graph.edges.length === 1 ? " link" : " links")

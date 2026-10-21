@@ -189,7 +189,7 @@ class LabelControllerTest(unittest.TestCase):
         self.assertEqual((found[0]["name"], found[0]["hint"]), ("Algebra", "Maths"))
 
     def test_the_graph_counts_a_resource_for_the_tags_above_its_own(self):
-        graph = self.ctl.knowledgeGraph
+        graph = self.ctl.resourceGraph
         graph.rebuild()
         from PySide6.QtCore import QEventLoop, QTimer
         loop = QEventLoop(); QTimer.singleShot(300, loop.quit); loop.exec()
