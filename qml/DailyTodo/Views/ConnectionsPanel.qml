@@ -56,18 +56,27 @@ ColumnLayout {
 
         model: panel.back ? panel.backlinks : panel.links
         section.property: panel.back ? "" : "group"
-        section.delegate: CapsLabel {
+        section.delegate: Item {
+            id: heading
             required property string section
             readonly property int page: parseInt(section)
             width: list.width - 8
-            topPadding: 4
-            text: page === 0 ? "Global" : "Page " + page
-            color: page === panel.currentPage ? Theme.accent : Theme.textFaint
+            height: headingLabel.implicitHeight + 8
 
-            HoverHandler { enabled: parent.page > 0; cursorShape: Qt.PointingHandCursor }
-            ClickHandler {
-                enabled: parent.page > 0
-                onTapped: panel.pageRequested(parent.page)
+            CapsLabel {
+                id: headingLabel
+                anchors.left: parent.left
+                anchors.top: parent.top
+                anchors.topMargin: 4
+                text: heading.page === 0 ? "Global" : "Page " + heading.page
+                color: heading.page === panel.currentPage ? Theme.accent : Theme.textFaint
+            }
+            // a page heading goes to that page (the global notes have no page)
+            MouseArea {
+                anchors.fill: parent
+                enabled: heading.page > 0
+                cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                onClicked: panel.pageRequested(heading.page)
             }
         }
 
