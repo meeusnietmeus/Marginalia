@@ -1112,12 +1112,20 @@ class TodoController(QObject):
             undo_sink=self._offer_undo,
             to_storage=self._to_storage,
             connections=self._connections_for,
+            describe=self._describe_resource,
         )
         session.error.connect(self.notify)
         return session
 
     def _to_storage(self, text: str) -> str:
         return to_storage_text(text, self._resolve_reference)
+
+    def _describe_resource(self, resource_id: ResourceId) -> dict | None:
+        """Name, kind and state of a resource of the current workspace, for lists of links."""
+        card = self._cards.get(resource_id)
+        if card is None:
+            return None
+        return {"name": card.name, "kind": card.kind, "missing": card.missing}
 
     def _connections_for(self, resource_id: ResourceId) -> list[dict]:
         """The resources linked to this one in either direction (the graph of its tab): only

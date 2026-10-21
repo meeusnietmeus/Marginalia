@@ -135,6 +135,12 @@ class TodoRepository(ABC):
         """(page, how many notes and questions) for every page of a resource that has any."""
 
     @abstractmethod
+    def list_mentions_of(self, resource_id: ResourceId) -> list[tuple[ResourceId, int | None]]:
+        """(source resource, page) for every note of ANOTHER resource that mentions this one with
+        ``@{...}``; the page is None for a global note. Once per page however often it is
+        mentioned."""
+
+    @abstractmethod
     def list_resource_links(self, resource_id: ResourceId) -> list[tuple[ResourceId, ResourceId]]:
         """(source, target) for every link that starts or ends at a resource: ``x -> y`` exists
         when a note of x mentions y with ``@{...}``, once however often it is mentioned. Kept up

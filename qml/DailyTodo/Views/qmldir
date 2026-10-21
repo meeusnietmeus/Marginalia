@@ -28,6 +28,7 @@ TagPill 1.0 TagPill.qml
 TagDialog 1.0 TagDialog.qml
 SectionList 1.0 SectionList.qml
 ResourceGraph 1.0 ResourceGraph.qml
+ConnectionsPanel 1.0 ConnectionsPanel.qml
 KnowledgeGraphPage 1.0 KnowledgeGraphPage.qml
 VideoPage 1.0 VideoPage.qml
 FlowchartPage 1.0 FlowchartPage.qml

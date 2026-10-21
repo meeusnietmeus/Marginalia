@@ -599,31 +599,16 @@ Item {
             delegate: entryDelegate
         }
 
-        // The resources this one is connected to (it mentions them, or they mention it).
-        ColumnLayout {
+        // What the page links to, and what links back to this document.
+        ConnectionsPanel {
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.preferredHeight: 1
-            spacing: 6
-
-            SectionTitle {
-                Layout.fillWidth: true
-                Layout.leftMargin: 14
-                text: "Connections"
-                badge: view.session && view.session.connections.length > 0
-                       ? String(view.session.connections.length) : ""
-                size: 22
-            }
-            ResourceGraph {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                Layout.leftMargin: 14
-                centerName: view.title
-                centerId: view.resourceId
-                onMenuRequested: (id, item, position) => view.actions.showMenu(id, item, position.x, position.y)
-                connections: view.session ? view.session.connections : []
-                onNodeClicked: (id) => view.controller.openResourceById(id)
-            }
+            session: view.session
+            controller: view.controller
+            actions: view.actions
+            currentPage: view.currentPage
+            onPageRequested: (page) => view.goToPage(page)
         }
 
         // Bottom part: "PAGE 5 OF 21" (the number is an input; scroll it to change page), then the

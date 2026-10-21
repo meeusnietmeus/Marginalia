@@ -486,6 +486,19 @@ class SqliteTodoRepository(TodoRepository):
                     (resource_id, target),
                 )
 
+    def list_mentions_of(self, resource_id: ResourceId) -> list[tuple[ResourceId, int | None]]:
+        with _translate_errors():
+            rows = self._conn.execute(
+                "SELECT resource_id, page, body FROM notes WHERE resource_id != ? AND body LIKE ?",
+                (resource_id, f"%@{{{resource_id}|%"),
+            ).fetchall()
+            found = {
+                (r["resource_id"], r["page"])
+                for r in rows
+                if resource_id in referenced_resource_ids([r["body"]])
+            }
+            return sorted(found, key=lambda m: (m[0], m[1] or 0))
+
     def list_resource_links(self, resource_id: ResourceId) -> list[tuple[ResourceId, ResourceId]]:
         with _translate_errors():
             rows = self._conn.execute(
