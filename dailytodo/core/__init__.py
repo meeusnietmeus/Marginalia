@@ -18,6 +18,7 @@ from .models import (
     WorkspaceId,
 )
 from .notes import with_question_mark
+from .todo_sort import SORT_CREATED, SORT_MODES, SORT_PRIORITY, SORT_TAGS, leading_tag, sort_todos
 from .resource_graph import (
     GraphResource,
     GraphTag,
@@ -98,6 +99,12 @@ from .resources import (
 )
 
 __all__ = [
+    "SORT_CREATED",
+    "SORT_MODES",
+    "SORT_PRIORITY",
+    "SORT_TAGS",
+    "leading_tag",
+    "sort_todos",
     "DEFAULT_HIGHLIGHT_COLOR",
     "HIGHLIGHT_COLORS",
     "DayPlanner",

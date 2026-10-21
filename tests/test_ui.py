@@ -74,6 +74,25 @@ class TodoControllerTest(unittest.TestCase):
         self.ctl.moveToToday(todo_id)
         self.assertEqual([t["text"] for t in self.role(0, "todos")], ["late"])
 
+    def test_todo_order_settings(self):
+        day = THU.isoformat()
+        for text in ("one", "two", "three"):
+            self.ctl.addTodo(day, text)
+        todos = lambda: [t["text"] for t in self.role(0, "todos")]
+        ids = {t["text"]: t["id"] for t in self.role(0, "todos")}
+        self.assertEqual(todos(), ["one", "two", "three"])
+        self.ctl.setPriority(ids["three"], True)
+        self.ctl.setTimelineSort("priority")
+        self.assertEqual(todos(), ["three", "one", "two"])
+        self.ctl.setTimelineSort("bogus")  # ignored
+        self.assertEqual(self.ctl.timelineSort, "priority")
+        self.ctl.setTimelineSort("created")
+        self.ctl.setDoneLast(True)
+        self.ctl.setDone(ids["one"], True)
+        self.assertEqual(todos(), ["two", "three", "one"])
+        self.ctl.setDoneLast(False)
+        self.assertEqual(todos(), ["one", "two", "three"])
+
     def test_rename_and_delete_workspace(self):
         first = self.ctl.workspaces[0]["id"]
         self.ctl.renameWorkspace("  Home ")

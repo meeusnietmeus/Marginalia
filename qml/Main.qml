@@ -420,6 +420,12 @@ ApplicationWindow {
         }
         canDelete: root.controller.workspaces.length > 1
         resourceFolder: root.settingsFolder
+        timelineSort: root.controller.timelineSort
+        backlogSort: root.controller.backlogSort
+        doneLast: root.controller.doneLast
+        onTimelineSortPicked: (mode) => root.controller.setTimelineSort(mode)
+        onBacklogSortPicked: (mode) => root.controller.setBacklogSort(mode)
+        onDoneLastToggled: (on) => root.controller.setDoneLast(on)
         onOpenFolderRequested: root.controller.openResource(root.settingsFolder)
         onAboutToShow: root.settingsFolder = root.controller.defaultResourceFolder()
         onSaveClicked: (name) => root.controller.renameWorkspace(name)
