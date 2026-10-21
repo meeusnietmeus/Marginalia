@@ -173,6 +173,13 @@ class OpenQuestions(QObject):
             self._write(lambda: self._repo.update_note(question_id, self._to_storage(body.strip())), "save")
 
     @Slot(int)
+    def convertToNote(self, question_id: NoteId) -> None:
+        """Turn an unanswered question into a plain note (it leaves this list)."""
+        if self._write(lambda: self._repo.set_note_kind(question_id, False), "convert"):
+            self._undo_sink("Question turned into a note",
+                            lambda: self._repo.set_note_kind(question_id, True) or self.refresh())
+
+    @Slot(int)
     def delete(self, question_id: NoteId) -> None:
         try:
             snapshot = self._repo.get_note_with_answers(question_id)  # for the undo

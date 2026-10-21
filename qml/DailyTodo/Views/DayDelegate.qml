@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import QtQuick.Shapes
 import DailyTodo.Style
 import DailyTodo.Controls
 
@@ -36,33 +35,6 @@ Item {
 
     // y (in this delegate) of the middle of the day header: where the graph branch arrives
     readonly property real headerY: card.y + Theme.dayPadding + header.height / 2
-
-    // ---- "move all to today": line from the header label down to the todos' move buttons ----
-    readonly property bool hasMissed: isPast && todos.some(t => !t.done)
-    property real moveLineX: 0              // centre of the move buttons (delegate coords)
-    property real moveLineStartX: 0         // just right of the "move all to today" label
-    property real moveLineEndY: 0           // centre of the last move button
-
-    function updateMoveLine() {
-        if (!hasMissed)
-            return
-        let last = null
-        for (let i = 0; i < todoRepeater.count; i++) {
-            const item = todoRepeater.itemAt(i)
-            if (item && item.todoRow.canMoveToToday)
-                last = item.todoRow.moveButton
-        }
-        if (!last)
-            return
-        const p = last.mapToItem(day, last.width / 2, last.height / 2)
-        moveLineX = p.x
-        moveLineEndY = p.y
-        const l = header.moveAllLabel
-        moveLineStartX = l.mapToItem(day, l.width + 6, 0).x
-    }
-    onTodosChanged: Qt.callLater(updateMoveLine)
-    onWidthChanged: Qt.callLater(updateMoveLine)
-    Component.onCompleted: Qt.callLater(updateMoveLine)
 
     // ---- floating "add todo" state ----
     property bool addRequested: false              // set by clicking the arrow / gap
@@ -141,32 +113,6 @@ Item {
         done: day.doneCount
     }
 
-    // Drawn under the todos so their move buttons (opaque base) sit on it like nodes.
-    Shape {
-        id: moveLine
-        visible: day.hasMissed && day.moveLineX > day.moveLineStartX
-        preferredRendererType: Shape.CurveRenderer
-        ShapePath {
-            id: moveShape
-            readonly property real r: Theme.graphRadius
-            strokeColor: header.moveAllHovered ? Theme.warning : Theme.graphColor
-            strokeWidth: Theme.graphLineWidth
-            fillColor: "transparent"
-            capStyle: ShapePath.FlatCap
-            startX: day.moveLineStartX
-            startY: day.headerY
-            PathLine { x: day.moveLineX - moveShape.r; y: day.headerY }
-            PathArc {
-                x: day.moveLineX
-                y: day.headerY + moveShape.r
-                radiusX: moveShape.r
-                radiusY: moveShape.r
-                direction: PathArc.Clockwise
-            }
-            PathLine { x: day.moveLineX; y: Math.max(day.headerY + moveShape.r, day.moveLineEndY) }
-        }
-    }
-
     AddArrow {
         shown: day.hoverGap !== null && !day.addOpen
         centerY: day.arrowY
@@ -220,10 +166,8 @@ Item {
                 isToday: day.isToday
                 isPast: day.isPast
                 showLateNightWarning: day.isToday && Clock.lateNight
-                showMoveAll: day.hasMissed
                 done: day.doneCount
                 total: day.todos.length
-                onMoveAllRequested: day.controller.moveAllToToday(day.dateIso)
             }
 
             // Todos. Each one is followed by an AddGap (the spacing between todos); only the
@@ -251,8 +195,6 @@ Item {
                             onMoveToDayRequested: (iso) => day.controller.moveToTimeline(todoItem.modelData.id, iso)
                             todo: todoItem.modelData
                             muted: day.isPast
-                            reserveMoveSlot: day.hasMissed
-                            moveHighlighted: header.moveAllHovered
                             canMoveToToday: day.isPast && !todoItem.modelData.done
                             onDoneToggled: (done) => day.controller.setDone(todoItem.modelData.id, done)
                             onPriorityToggled: (on) => day.controller.setPriority(todoItem.modelData.id, on)

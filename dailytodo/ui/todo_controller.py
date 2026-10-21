@@ -1375,7 +1375,16 @@ class TodoController(QObject):
     @Slot(int, bool)
     def setDone(self, todo_id: TodoId, done: bool) -> None:
         """Done or not; a todo that is done is no longer in progress."""
-        self._mutate(lambda: self._repo.set_done(todo_id, done))
+        # A done backlog todo leaves the backlog at once, so offer to bring it back.
+        row = next((r for r in self._backlog.rows if r.id == todo_id), None) if done else None
+        if not self._mutate(lambda: self._repo.set_done(todo_id, done)) or row is None:
+            return
+        shown = to_edit_text(row.text, self._name_of).replace("\n", " ")
+        shown = shown if len(shown) <= 28 else shown[:27] + "..."
+        self._offer_undo(
+            f"Completed \"{shown}\"",
+            lambda: self._mutate(lambda: self._repo.set_done(todo_id, False)),
+        )
 
     @Slot(int, bool)
     def setPriority(self, todo_id: TodoId, priority: bool) -> None:
@@ -1420,14 +1429,6 @@ class TodoController(QObject):
     @Slot(int)
     def moveToToday(self, todo_id: TodoId) -> None:
         self._mutate(lambda: self._repo.move_to_day(todo_id, self._planner.today))
-
-    @Slot(str)
-    def moveAllToToday(self, date_iso: str) -> None:
-        """Move every uncompleted todo of a (past) day to today."""
-        day = date.fromisoformat(date_iso)
-        self._mutate(
-            lambda: self._repo.move_open_todos(self._workspace_id, day, self._planner.today)
-        )
 
     @Slot(int)
     def deleteTodo(self, todo_id: TodoId) -> None:
@@ -1719,7 +1720,7 @@ class TodoController(QObject):
     def _show(self, todos: list[Todo], planner: DayPlanner | None = None) -> None:
         """Fill the timeline and the backlog from one list of todos."""
         self._days.set_rows((planner or self._planner).rows(todos))
-        self._backlog.set_rows([BacklogTodo.from_todo(t) for t in todos if t.day is None])
+        self._backlog.set_rows([BacklogTodo.from_todo(t) for t in todos if t.day is None and not t.done])
 
     def _fetch(self, workspace_id: WorkspaceId) -> list[Todo] | None:
         try:

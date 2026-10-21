@@ -74,7 +74,7 @@ Item {
         Qt.callLater(function () {
             // a time that is given is right: straight on to the text
             if (view.askForTime && o.time === undefined) { boxTime.forceActiveFocus(); boxTime.selectAll() }
-            else noteBox.input.forceActiveFocus()
+            else noteBox.input.grabFocus()
         })
     }
     function closeNoteBox() {
@@ -171,6 +171,12 @@ Item {
             text: "Move to global"
             onTriggered: view.session.moveToGlobal(localMenu.entry.noteId)
         }
+        AppMenuItem {
+            visible: localMenu.entry !== null && !localMenu.entry.isAnswer && !(localMenu.entry.isQuestion && localMenu.entry.answered)
+            height: visible ? implicitHeight : 0
+            text: localMenu.entry && localMenu.entry.isQuestion ? "Convert to note" : "Convert to question"
+            onTriggered: view.session.setQuestion(localMenu.entry.noteId, !localMenu.entry.isQuestion)
+        }
     }
     CrudMenu {
         id: globalMenu
@@ -180,6 +186,12 @@ Item {
         AppMenuItem {
             text: "Pin to a moment..."
             onTriggered: timePrompt.ask(globalMenu.entry.noteId, false)
+        }
+        AppMenuItem {
+            visible: globalMenu.entry !== null && !globalMenu.entry.isAnswer && !(globalMenu.entry.isQuestion && globalMenu.entry.answered)
+            height: visible ? implicitHeight : 0
+            text: globalMenu.entry && globalMenu.entry.isQuestion ? "Convert to note" : "Convert to question"
+            onTriggered: view.session.setQuestion(globalMenu.entry.noteId, !globalMenu.entry.isQuestion)
         }
     }
 

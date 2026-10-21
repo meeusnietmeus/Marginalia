@@ -218,6 +218,11 @@ class NotesSession(QObject):
             stored = self._to_storage(body.strip())
             self._write(lambda: self._repo.update_note(note_id, stored), "save")
 
+    @Slot(int, bool)
+    def setQuestion(self, note_id: NoteId, is_question: bool) -> None:
+        """Turn a note into a question, or an unanswered question into a note."""
+        self._write(lambda: self._repo.set_note_kind(note_id, is_question), "convert")
+
     @Slot(int)
     def deleteNote(self, note_id: NoteId) -> None:
         """Delete a note / question (with its answers) / answer, and offer to undo it."""

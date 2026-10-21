@@ -46,7 +46,7 @@ Item {
     function startEdit() {
         editArea.text = controller.toEditText(body)
         editing = true
-        Qt.callLater(function () { editArea.forceActiveFocus() })
+        Qt.callLater(function () { editArea.grabFocus() })
     }
     function saveEdit() {
         if (editArea.text.trim() !== "")

@@ -135,6 +135,12 @@ QtObject {
     // ---- behaviour ----
     // How long (ms) the pointer must rest on a day's "add todo" row before it fades in.
     readonly property int revealDelay: 50
+
+    // List entries appearing / leaving (notes, questions): quick, but not instant
+    readonly property int listEnterDuration: 180
+    readonly property int listExitDuration: 120
+    readonly property int listMoveDuration: 180
+    readonly property real listEnterRise: 8        // px an entry rises while it fades in
     // Mouse-wheel / touchpad scroll speed in the todo list, relative to Qt's default (1 = default).
     readonly property real scrollSpeed: 1.0
 

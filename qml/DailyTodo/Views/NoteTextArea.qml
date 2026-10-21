@@ -20,6 +20,26 @@ TextArea {
     signal cancelled()
     signal tabPressed()
 
+    // Take the keyboard for an editor that has just been opened (from a menu entry, a shortcut...).
+    // Whatever else is still being closed or released at that moment (a popup handing focus back,
+    // the tail of the click) can take it away again, so for a split second it is claimed back
+    // if it was lost, unless the box has gone.
+    function grabFocus() {
+        area.forceActiveFocus()
+        regrab.ticks = 0
+        regrab.restart()
+    }
+    Timer {
+        id: regrab
+        property int ticks: 0
+        interval: 40
+        repeat: true
+        onTriggered: {
+            if (!area.visible || ++ticks > 8) { stop(); return }
+            if (!area.activeFocus) area.forceActiveFocus()
+        }
+    }
+
     readonly property real minHeight: lines * font.pixelSize * 1.5 + 16
     implicitHeight: autoGrow ? Math.max(minHeight, contentHeight + topPadding + bottomPadding)
                              : minHeight

@@ -66,11 +66,12 @@ class TodoControllerTest(unittest.TestCase):
         self.ctl.createWorkspace("   ", self.workspace_folder("blank"))
         self.assertEqual(len(self.ctl.workspaces), count)
 
-    def test_move_all_to_today(self):
+    def test_move_missed_todo_to_today(self):
         self.ctl.addTodo(THU.isoformat(), "late")
         self.today = THU + timedelta(days=1)
         self.ctl.checkNewDay()
-        self.ctl.moveAllToToday(THU.isoformat())
+        todo_id = self.role(0, "todos")[0]["id"]
+        self.ctl.moveToToday(todo_id)
         self.assertEqual([t["text"] for t in self.role(0, "todos")], ["late"])
 
     def test_rename_and_delete_workspace(self):
@@ -238,18 +239,25 @@ class TodoControllerTest(unittest.TestCase):
         self.assertEqual(texts(), ["read chapter 3"])
         self.assertEqual([t["text"] for t in self.role(0, "todos")], [])  # not on the timeline
         todo_id = self.ctl.backlog.rows[0].id
+        # a done todo leaves the backlog, and the toast brings it back
         self.ctl.setDone(todo_id, True)
-        self.assertTrue(self.ctl.backlog.rows[0].done)
+        self.assertEqual(texts(), [])
+        self.assertEqual(len(offers), 1)
+        self.ctl.undo(offers[-1])
+        self.assertEqual([(b.text, b.done) for b in self.ctl.backlog.rows], [("read chapter 3", False)])
+        self.ctl.setDone(todo_id, True)
+        offers.clear()
         # backlog -> timeline (only days the timeline shows)
         self.ctl.moveToTimeline(todo_id, (THU + timedelta(days=60)).isoformat())
-        self.assertEqual(texts(), ["read chapter 3"])  # refused
+        self.assertEqual([t["text"] for t in self.role(1, "todos")], [])  # refused
         self.ctl.moveToTimeline(todo_id, (THU + timedelta(days=1)).isoformat())
         self.assertEqual(texts(), [])
         self.assertEqual([(t["text"], t["done"]) for t in self.role(1, "todos")], [("read chapter 3", True)])
         # timeline -> backlog keeps text and done state
         self.ctl.moveToBacklog(todo_id)
-        self.assertEqual([(b.text, b.done) for b in self.ctl.backlog.rows], [("read chapter 3", True)])
+        self.assertEqual(texts(), [])  # done todos stay out of the backlog
         self.assertEqual([t["text"] for t in self.role(1, "todos")], [])
+        self.ctl.setDone(todo_id, False)
         # editing and deleting (with undo) work the same for backlog todos
         self.ctl.editTodo(todo_id, "read chapter 4")
         self.ctl.deleteTodo(todo_id)

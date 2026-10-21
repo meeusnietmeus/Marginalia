@@ -122,7 +122,7 @@ AppDialog {
 
     width: Math.min(420, parent.width - 40)
 
-    onOpened: if (mode === "link") linkField.forceActiveFocus()
+    onOpened: (mode === "link" ? linkField : nameField).forceActiveFocus()
     onPathChanged: reseedName()
 
     // For web links, replace the suggestion with the page's title once it has been looked up
@@ -152,7 +152,7 @@ AppDialog {
     FileDialog {
         id: fileDialog
         title: "Choose a file"
-        onAccepted: dialog.path = dialog.controller.localPath(selectedFile)
+        onAccepted: { dialog.path = dialog.controller.localPath(selectedFile); nameField.forceActiveFocus() }
     }
 
     contentItem: ColumnLayout {

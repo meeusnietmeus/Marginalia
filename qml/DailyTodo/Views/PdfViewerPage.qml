@@ -253,7 +253,7 @@ Item {
         boxPage = o.page || 0
         noteBoxOpen = true
         noteBox.input.text = o.text || ""
-        Qt.callLater(function () { noteBox.input.forceActiveFocus() })
+        Qt.callLater(function () { noteBox.input.grabFocus() })
     }
 
     function closeNoteBox() {
@@ -396,6 +396,9 @@ Item {
         property Item entry
         // answers can't be tied to a highlight (only the note or question itself)
         readonly property bool linkable: entry !== null && entry.canLink
+        // a note can become a question, an unanswered question a note; answers stay answers
+        readonly property bool convertible: entry !== null && !entry.isAnswer
+                                            && !(entry.isQuestion && entry.answered)
         readonly property bool canUseSelection: view.activeSelection !== null
                                                 && view.activeSelection.page === view.currentPage
         onEditTriggered: entry.edit()
@@ -403,6 +406,12 @@ Item {
         AppMenuItem {
             text: "Move to global"
             onTriggered: view.session.moveToGlobal(localMenu.entry.noteId)
+        }
+        AppMenuItem {
+            visible: localMenu.convertible
+            height: visible ? implicitHeight : 0
+            text: localMenu.entry && localMenu.entry.isQuestion ? "Convert to note" : "Convert to question"
+            onTriggered: view.session.setQuestion(localMenu.entry.noteId, !localMenu.entry.isQuestion)
         }
         AppMenuItem {
             visible: localMenu.linkable && localMenu.entry.highlightId < 0 && localMenu.canUseSelection
@@ -484,6 +493,12 @@ Item {
         AppMenuItem {
             text: "To local: choose a page..."
             onTriggered: pagePrompt.ask(globalMenu.entry.noteId)
+        }
+        AppMenuItem {
+            visible: globalMenu.entry !== null && !globalMenu.entry.isAnswer && !(globalMenu.entry.isQuestion && globalMenu.entry.answered)
+            height: visible ? implicitHeight : 0
+            text: globalMenu.entry && globalMenu.entry.isQuestion ? "Convert to note" : "Convert to question"
+            onTriggered: view.session.setQuestion(globalMenu.entry.noteId, !globalMenu.entry.isQuestion)
         }
     }
 
@@ -1482,6 +1497,13 @@ Item {
                 boundsBehavior: Flickable.StopAtBounds
                 contentHeight: slideColumn.height
                 ScrollBar.vertical: AppScrollBar {}
+
+                // a new slide / page starts at the top of its notes
+                Connections {
+                    target: view
+                    function onCurrentPageChanged() { slideFlick.contentY = 0 }
+                    function onSlideInfoChanged() { slideFlick.contentY = 0 }
+                }
 
                 CapsLabel {
                     visible: view.slideInfo === null

@@ -25,7 +25,9 @@ RowActionButton {
     onClicked: {
         const menu = owner()
         if (menu) menu.close()
-        triggered()
+        // After this click has been fully delivered, so what the action focuses (an editor) can't
+        // be undone by the tail of the same click.
+        Qt.callLater(button.triggered)
     }
 
     AppToolTip {

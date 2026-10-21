@@ -213,6 +213,11 @@ class TodoRepository(ABC):
         """Change a note's text and bump ``updated_at``."""
 
     @abstractmethod
+    def set_note_kind(self, note_id: NoteId, is_question: bool) -> None:
+        """Turn a note into a question (it gets its "?") or an unanswered question into a note.
+        Answers can't change kind, and a question with answers must keep being one."""
+
+    @abstractmethod
     def delete_note(self, note_id: NoteId) -> None: ...
 
     @abstractmethod
@@ -247,10 +252,6 @@ class TodoRepository(ABC):
     @abstractmethod
     def move_to_day(self, todo_id: TodoId, day: date | None) -> None:
         """Give a todo a day, or ``None`` to move it to the backlog."""
-
-    @abstractmethod
-    def move_open_todos(self, workspace_id: WorkspaceId, from_day: date, to_day: date) -> None:
-        """Move every uncompleted todo of ``from_day`` (in one workspace) to ``to_day``."""
 
     @abstractmethod
     def update_text(self, todo_id: TodoId, text: str) -> None: ...

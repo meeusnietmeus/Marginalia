@@ -16,14 +16,8 @@ RowLayout {
     property bool isToday: false
     property bool isPast: false
     property bool showLateNightWarning: false
-    property bool showMoveAll: false
     property int done: 0
     property int total: 0
-    readonly property bool moveAllHovered: moveAllHover.hovered
-    property alias moveAllLabel: moveAllLabel
-
-    signal moveAllRequested()
-
     spacing: 10
 
     Label {
@@ -56,19 +50,6 @@ RowLayout {
             text: "It's getting late, you're starting to blend days!"
             shown: lateHover.hovered
         }
-    }
-    // Past day with missed todos: send them all to today. The day delegate draws the line
-    // that runs from here down to the todos' move buttons.
-    CapsLabel {
-        id: moveAllLabel
-        visible: header.showMoveAll
-        text: "Move all to today"
-        color: moveAllHover.hovered ? Theme.warning : Theme.textMuted
-        Layout.leftMargin: 8
-        Layout.topMargin: 2
-
-        HoverHandler { id: moveAllHover; cursorShape: Qt.PointingHandCursor }
-        ClickHandler { onTapped: header.moveAllRequested() }
     }
     Item { Layout.fillWidth: true }
 }
