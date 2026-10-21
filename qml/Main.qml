@@ -51,7 +51,7 @@ ApplicationWindow {
 
     property string settingsFolder: ""        // the workspace settings dialog's view of the setting
 
-    // Open resource tabs, after the fixed pages (Overview, Open questions, Knowledge graph).
+    // Open resource tabs, after the fixed pages (Overview, Open questions, Resource graph).
     // kind: "pdf" (a PDF, or with hasDocument false the notes tab of any other resource) | "video" |
     // "flowchart" | "unified" (every note and question of a PDF on one page; a second tab of the
     // same resource).
@@ -80,7 +80,7 @@ ApplicationWindow {
         const pages = {
             overview: { title: "Overview", icon: Theme.iconCalendar },
             questions: { title: "Open questions", icon: Theme.iconInfo, page: questionsPage },
-            graph: { title: "Knowledge graph", icon: Theme.iconLink, page: graphPage },
+            graph: { title: "Resource graph", icon: Theme.iconLink, page: graphPage },
             search: { title: "Search", icon: Theme.iconSearch }
         }
         const current = viewKey()
@@ -300,7 +300,7 @@ ApplicationWindow {
             property int tagToShow: -2           // asked for before the page was made
             shown: root.currentView === "graph"
             onLoaded: if (tagToShow > -2) { item.showTag(tagToShow); tagToShow = -2 }
-            sourceComponent: KnowledgeGraphPage { controller: root.controller; actions: resourceActions }
+            sourceComponent: ResourceGraphPage { controller: root.controller; actions: resourceActions }
         }
 
         SearchPage { controller: root.controller; actions: resourceActions }
@@ -420,6 +420,12 @@ ApplicationWindow {
         }
         canDelete: root.controller.workspaces.length > 1
         resourceFolder: root.settingsFolder
+        timelineSort: root.controller.timelineSort
+        backlogSort: root.controller.backlogSort
+        doneLast: root.controller.doneLast
+        onTimelineSortPicked: (mode) => root.controller.setTimelineSort(mode)
+        onBacklogSortPicked: (mode) => root.controller.setBacklogSort(mode)
+        onDoneLastToggled: (on) => root.controller.setDoneLast(on)
         onOpenFolderRequested: root.controller.openResource(root.settingsFolder)
         onAboutToShow: root.settingsFolder = root.controller.defaultResourceFolder()
         onSaveClicked: (name) => root.controller.renameWorkspace(name)
@@ -499,7 +505,7 @@ ApplicationWindow {
         function onVideoRequested(resourceId, name, uri, page) { root.openVideo(resourceId, name, uri, page) }
         function onFlowchartRequested(resourceId, name, uri) { root.openFlowchart(resourceId, name, uri) }
         function onCaptureReady(resourceId, kind, seconds) { root.openCaptureBox(resourceId, kind, seconds) }
-        // a tag clicked in a todo or a note: the Knowledge graph, at that tag
+        // a tag clicked in a todo or a note: the Resource graph, at that tag
         function onTagRequested(tagId) {
             root.currentView = "graph"
             if (graphPage.item) graphPage.item.showTag(tagId)

@@ -96,18 +96,6 @@ class SqliteRepositoryTest(unittest.TestCase):
             self.assertIsNone(backlog.day)
             repo.close()
 
-    def test_move_open_todos(self):
-        other = self.repo.list_workspaces()[1].id
-        done = self.repo.add(self.ws, DAY, "done")
-        self.repo.set_done(done.id, True)
-        self.repo.add(self.ws, DAY, "open")
-        self.repo.add(other, DAY, "elsewhere")
-        target = date(2026, 10, 3)
-        self.repo.move_open_todos(self.ws, DAY, target)
-        days = {t.text: t.day for t in self.repo.list_todos(self.ws)}
-        self.assertEqual(days, {"done": DAY, "open": target})
-        self.assertEqual(self.repo.list_todos(other)[0].day, DAY)
-
     def test_create_workspace(self):
         created = self.repo.create_workspace("Gym")
         self.assertEqual(self.repo.list_workspaces()[-1], created)

@@ -15,6 +15,7 @@ from ..core import (
     ResourceId,
     timeline_groups,
 )
+from ..core.references import referenced_resource_ids
 from ..storage import RepositoryError, TodoRepository
 from .note_list_model import NoteEntry, NoteListModel
 
@@ -74,6 +75,7 @@ class NotesSession(QObject):
     highlightsChanged = Signal()
     notedPagesChanged = Signal()
     connectionsChanged = Signal()
+    linksChanged = Signal()
     timelineChanged = Signal()
     globalCountsChanged = Signal()
 
@@ -86,11 +88,15 @@ class NotesSession(QObject):
         undo_sink: Callable[[str, Callable[[], None]], None] | None = None,
         to_storage: Callable[[str], str] | None = None,
         connections: Callable[[ResourceId], list[dict]] | None = None,
+        describe: Callable[[ResourceId], dict | None] | None = None,
     ):
         super().__init__(parent)
         self._to_storage = to_storage or (lambda text: text)  # `@{Name}` -> `@{id|Name}`
         self._connections_of = connections or (lambda resource_id: [])
         self._connections: list[dict] = []
+        self._describe = describe or (lambda resource_id: None)  # {name, kind, missing} or None
+        self._page_links: list[dict] = []
+        self._backlinks: list[dict] = []
         self._timeline: list[dict] = []
         self._global_counts = (0, 0)
         self._repo = repo
@@ -147,6 +153,19 @@ class NotesSession(QObject):
         """The resources directly connected to this one, for the graph: dicts with id, name, kind,
         missing, outgoing (this one mentions it) and incoming (it mentions this one)."""
         return self._connections
+
+    @Property("QVariantList", notify=linksChanged)
+    def pageLinks(self) -> list:
+        """Every resource this one mentions, once per page of the note that does it (page 0: a
+        global note), by page: dicts with id, name, kind, missing, page and group (the page as a
+        sortable string, for sectioning a list)."""
+        return self._page_links
+
+    @Property("QVariantList", notify=linksChanged)
+    def backlinks(self) -> list:
+        """The notes of other resources that mention this one: dicts with id (the other resource),
+        name, kind, missing and page (0: a global note)."""
+        return self._backlinks
 
     @Property("QVariantList", notify=timelineChanged)
     def timeline(self) -> list:
@@ -217,6 +236,11 @@ class NotesSession(QObject):
         if body.strip():
             stored = self._to_storage(body.strip())
             self._write(lambda: self._repo.update_note(note_id, stored), "save")
+
+    @Slot(int, bool)
+    def setQuestion(self, note_id: NoteId, is_question: bool) -> None:
+        """Turn a note into a question, or an unanswered question into a note."""
+        self._write(lambda: self._repo.set_note_kind(note_id, is_question), "convert")
 
     @Slot(int)
     def deleteNote(self, note_id: NoteId) -> None:
@@ -389,8 +413,38 @@ class NotesSession(QObject):
             self._noted_pages = pages
             self.notedPagesChanged.emit()
 
+    def _load_links(self) -> None:
+        """What this page links to, and what links back here (see pageLinks / backlinks)."""
+        try:
+            notes = self._repo.list_all_notes(self._resource_id)
+            mentions = self._repo.list_mentions_of(self._resource_id)
+        except RepositoryError as exc:
+            self.error.emit(f"Couldn't load the links: {exc}")
+            return
+        found: set[tuple[int, int]] = set()  # (page, resource); page 0 is the global notes
+        for note in notes:
+            for target in referenced_resource_ids([note.body]):
+                if target != self._resource_id:
+                    found.add((note.page or 0, target))
+        links = []
+        for page, target in found:
+            info = self._describe(target)
+            if info is not None:  # (a resource of another workspace, or one that is gone)
+                links.append({"id": target, **info, "page": page, "group": f"{page:06d}"})
+        backlinks = []
+        for source, page in mentions:
+            info = self._describe(source)
+            if info is not None:
+                backlinks.append({"id": source, **info, "page": page or 0})
+        links.sort(key=lambda e: (e["page"], e["name"].casefold()))
+        backlinks.sort(key=lambda e: (e["name"].casefold(), e["page"]))
+        if links != self._page_links or backlinks != self._backlinks:
+            self._page_links, self._backlinks = links, backlinks
+            self.linksChanged.emit()
+
     def _load(self) -> None:
         self._load_noted_pages()
+        self._load_links()
         try:
             everything = self._repo.list_notes(self._resource_id, self._page)
             quotes = self._quotes()
@@ -441,3 +495,4 @@ class NotesSession(QObject):
     def refreshConnections(self) -> None:
         """Look again (a resource may have been renamed or deleted since)."""
         self._load_connections()
+        self._load_links()

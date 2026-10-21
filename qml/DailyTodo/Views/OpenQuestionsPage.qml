@@ -351,7 +351,7 @@ Item {
                 function startEdit() {
                     editArea.text = view.controller.toEditText(body)
                     editing = true
-                    Qt.callLater(() => editArea.forceActiveFocus())
+                    Qt.callLater(() => editArea.grabFocus())
                 }
                 function saveEdit() {
                     if (editArea.text.trim() !== "") view.oq.edit(noteId, editArea.text)
@@ -458,6 +458,10 @@ Item {
                         text: card.page > 0 ? "Open at " + card.pageLabel.toLowerCase() : "Open"
                         iconSource: Theme.iconInApp
                         onTriggered: view.openAt(card.resourceId, card.page)
+                    }
+                    AppMenuItem {
+                        text: "Convert to note"
+                        onTriggered: view.oq.convertToNote(card.noteId)
                     }
                 }
             }

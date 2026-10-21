@@ -4,7 +4,8 @@ import QtQuick.Layouts
 import DailyTodo.Style
 import DailyTodo.Controls
 
-// Modal for the active workspace: rename it or delete it (with a confirmation step).
+// Modal for the active workspace: rename it, choose how its todos are ordered, or delete it (with a
+// confirmation step).
 AppDialog {
     id: dialog
 
@@ -13,6 +14,13 @@ AppDialog {
     property bool confirming: false
     property string resourceFolder          // native path of the workspace's folder, "" = none
 
+    property string timelineSort: "created"   // "created" | "priority" | "tags"
+    property string backlogSort: "created"
+    property bool doneLast: false
+
+    signal timelineSortPicked(string mode)
+    signal backlogSortPicked(string mode)
+    signal doneLastToggled(bool on)
     signal openFolderRequested()
     signal saveClicked(string name)
     signal deleteConfirmed()
@@ -92,6 +100,66 @@ AppDialog {
                     enabled: dialog.resourceFolder !== ""
                     onClicked: dialog.openFolderRequested()
                 }
+            }
+        }
+        Rectangle { Layout.fillWidth: true; height: 1; color: Theme.menuBorder }
+
+        // ---- how the todos are ordered ----
+        component SortPicker: RowLayout {
+            id: picker
+            property string current
+            signal picked(string mode)
+            spacing: 6
+            Repeater {
+                model: [{ mode: "created", text: "Created" },
+                        { mode: "priority", text: "Priority first" },
+                        { mode: "tags", text: "By tag" }]
+                AppButton {
+                    required property var modelData
+                    compact: true
+                    text: modelData.text
+                    active: picker.current === modelData.mode
+                    onClicked: picker.picked(modelData.mode)
+                }
+            }
+        }
+        ColumnLayout {
+            spacing: 8
+            Layout.fillWidth: true
+            Label { text: "Timeline order"; font.pixelSize: 12; color: Theme.textMuted }
+            SortPicker {
+                current: dialog.timelineSort
+                onPicked: (mode) => dialog.timelineSortPicked(mode)
+            }
+            RowLayout {
+                spacing: 8
+                AppCheckBox {
+                    checked: dialog.doneLast
+                    onToggled: dialog.doneLastToggled(checked)
+                }
+                Label {
+                    text: "Show done todos last"
+                    font.pixelSize: 13
+                    color: Theme.text
+                    ClickHandler { onTapped: dialog.doneLastToggled(!dialog.doneLast) }
+                }
+            }
+            Label {
+                Layout.topMargin: 6
+                text: "Backlog order"
+                font.pixelSize: 12
+                color: Theme.textMuted
+            }
+            SortPicker {
+                current: dialog.backlogSort
+                onPicked: (mode) => dialog.backlogSortPicked(mode)
+            }
+            Label {
+                text: "\"By tag\" groups the todos that start with the same tag, in the order of your tag list."
+                font.pixelSize: 11
+                color: Theme.textFaint
+                wrapMode: Text.Wrap
+                Layout.fillWidth: true
             }
         }
         Rectangle { Layout.fillWidth: true; height: 1; color: Theme.menuBorder }

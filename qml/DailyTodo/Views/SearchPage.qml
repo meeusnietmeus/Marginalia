@@ -40,7 +40,11 @@ Item {
         list.positionViewAtBeginning()
     }
     // notes are written elsewhere: look again when the page comes back into view
-    onVisibleChanged: if (visible && searched !== "") runSearch()
+    onVisibleChanged: {
+        if (!visible) return
+        if (searched !== "") runSearch()
+        Qt.callLater(() => { field.forceActiveFocus(); field.selectAll() })
+    }
 
     function open(resourceId, page) { controller.openResourceAtPage(resourceId, page) }
 

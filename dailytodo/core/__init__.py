@@ -18,10 +18,11 @@ from .models import (
     WorkspaceId,
 )
 from .notes import with_question_mark
-from .knowledge_graph import (
+from .todo_sort import SORT_CREATED, SORT_MODES, SORT_PRIORITY, SORT_TAGS, leading_tag, sort_todos
+from .resource_graph import (
     GraphResource,
     GraphTag,
-    KnowledgeGraph,
+    ResourceGraph,
     UNTAGGED,
     build_graph,
     find_clusters,
@@ -98,6 +99,12 @@ from .resources import (
 )
 
 __all__ = [
+    "SORT_CREATED",
+    "SORT_MODES",
+    "SORT_PRIORITY",
+    "SORT_TAGS",
+    "leading_tag",
+    "sort_todos",
     "DEFAULT_HIGHLIGHT_COLOR",
     "HIGHLIGHT_COLORS",
     "DayPlanner",
@@ -175,7 +182,7 @@ __all__ = [
     "time_ago",
     "GraphResource",
     "GraphTag",
-    "KnowledgeGraph",
+    "ResourceGraph",
     "UNTAGGED",
     "build_graph",
     "find_clusters",

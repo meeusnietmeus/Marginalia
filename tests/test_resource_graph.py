@@ -128,7 +128,7 @@ class ModelTest(unittest.TestCase):
             self.ctl.addResource(f"https://{name}.example", name, [])
         ids = {r.name: r.id for r in self.repo.list_resources(self.ctl.currentWorkspaceId)}
         self.repo.add_note(ids["One"], None, f"@{{{ids['Two']}|Two}}")
-        self.kg = self.ctl.knowledgeGraph
+        self.kg = self.ctl.resourceGraph
 
     def tearDown(self):
         self.repo.close()
@@ -206,7 +206,7 @@ class NameLimitTest(unittest.TestCase):
         self.assertEqual(node_label("x" * 81), "x" * 80 + "…")
 
     def test_pills_grow_with_the_name_and_the_layout_leaves_room(self):
-        from dailytodo.core.knowledge_graph import NODE_W, node_width
+        from dailytodo.core.resource_graph import NODE_W, node_width
 
         self.assertEqual(node_width("short"), NODE_W)
         self.assertGreater(node_width("y" * 80), 3 * NODE_W)

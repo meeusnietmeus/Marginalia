@@ -90,7 +90,7 @@ ToolBar {
                 Repeater {
                     model: [{ kind: "overview", text: "Overview" },
                             { kind: "questions", text: "Open questions" },
-                            { kind: "graph", text: "Knowledge graph" },
+                            { kind: "graph", text: "Resource graph" },
                             { kind: "search", text: "Search" }]
                     AppButton {
                         id: pageButton

@@ -29,7 +29,7 @@ dailytodo/
   titles.py, thumbnails.py   fetching a web page's title / a video's preview picture
   core/                      plain Python, no Qt, no storage: models, days, resources, labels (tags),
                              references (@{..} / !{..}), notes, open questions, video timestamps and
-                             timeline, presentations (reading notes/comments), knowledge graph layout,
+                             timeline, presentations (reading notes/comments), resource graph layout,
                              flowchart files (JSON Canvas), Markdown export
   storage/                   persistence, no Qt
     base.py                  TodoRepository contract, BackupCapable, RepositoryError
@@ -42,8 +42,8 @@ dailytodo/
     todo_controller.py       the object QML talks to (slots, models, notify / undo)
     notes_session.py         the notes and highlights of one open tab
     open_questions.py        state of the "Open questions" page
-    knowledge_graph.py       state of the "Knowledge graph" page (layout on a worker thread: every
-                             resource in the region of its tag, sub-tags nested, see core/knowledge_graph.py)
+    resource_graph.py       state of the "Resource graph" page (layout on a worker thread: every
+                             resource in the region of its tag, sub-tags nested, see core/resource_graph.py)
 qml/
   Main.qml                   window shell: fixed pages, resource tabs, toasts
   DailyTodo/Style/           Theme singleton + icons/
@@ -154,7 +154,7 @@ brings the running window to the front instead of opening a second one.
   (a resource's global notes and Q&A, on the PDF and video tabs), `ResourceActions` (a
   resource's right-click menu and its edit / delete dialogs: one instance in `Main.qml`, handed
   to the library, "Jump back in" and the resource tabs), `NumberField` and `LazyPage` (a page that
-  unloads itself 5 minutes after it was left: Open questions and Knowledge graph).
+  unloads itself 5 minutes after it was left: Open questions and Resource graph).
 - **Todo flags:** a todo can be a *priority* (an ember flag before its text) and *in progress* (a
   half-filled amber checkbox), both switched from its right-click menu
   (`Controls/AppMenuToggle.qml`). Done and in progress rule each other out (the repository sees

@@ -39,8 +39,23 @@ ColumnLayout {
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: AppScrollBar {}
 
+        // Quick but soft: entries fade in with a small rise, fade out in place, and the rest glide
+        // into their new spots instead of jumping.
+        add: Transition {
+            ParallelAnimation {
+                NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Theme.listEnterDuration; easing.type: Easing.OutCubic }
+                NumberAnimation { property: "y"; from: ViewTransition.destination.y + Theme.listEnterRise; duration: Theme.listEnterDuration; easing.type: Easing.OutCubic }
+            }
+        }
+        remove: Transition {
+            NumberAnimation { property: "opacity"; to: 0; duration: Theme.listExitDuration; easing.type: Easing.OutCubic }
+        }
+        displaced: Transition {
+            NumberAnimation { properties: "y"; duration: Theme.listMoveDuration; easing.type: Easing.OutCubic }
+        }
+
         CapsLabel {
-            visible: list.count === 0 && section.emptyText !== "" && !section.loading
+            visible: list.count === 0 && section.emptyText !== ""
             width: list.width - 8
             topPadding: 6
             wrapMode: Text.Wrap

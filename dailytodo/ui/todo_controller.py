@@ -25,10 +25,14 @@ from ..core import (
     dump_flowchart,
     flowchart_from_view,
     parse_flowchart,
+    SORT_CREATED,
+    SORT_MODES,
+    SORT_TAGS,
     SORTS,
     STATUSES,
     STATUS_LABELS,
     UNIFIED_FILTERS,
+    sort_todos,
     DayPlanner,
     ResourceCard,
     ResourceId,
@@ -90,7 +94,7 @@ from ..storage import (
 from .backlog_list_model import BacklogListModel, BacklogTodo
 from .day_list_model import DayListModel
 from .notes_session import NotesSession
-from .knowledge_graph import KnowledgeGraphModel
+from .resource_graph import ResourceGraphModel
 from .open_questions import OpenQuestions
 from .resource_list_model import ResourceListModel
 from .tag_list_model import TagListModel
@@ -125,6 +129,7 @@ class TodoController(QObject):
 
     notify = Signal(str)  # short messages for the UI to show as a toast
     workspaceChanged = Signal()
+    todoOrderChanged = Signal()  # the sort order of the timeline or the backlog (or "done last")
     workspacesChanged = Signal()
     # Answer to fetchTitle: (url, page title or "", error message or "")
     titleLookup = Signal(str, str, str)
@@ -148,7 +153,7 @@ class TodoController(QObject):
     resourceRemoved = Signal(int)  # a resource is gone for good: close its PDF tab
     pdfScrollSpeedChanged = Signal()
     recentChanged = Signal()  # what was opened last, or where a PDF was left, changed
-    tagRequested = Signal(int)  # a tag was clicked in some text: show it (the Knowledge graph)
+    tagRequested = Signal(int)  # a tag was clicked in some text: show it (the Resource graph)
     # A capture from outside (the browser extension, see ``handleLink``):
     captureReady = Signal(int, str, int)  # (resource id, note|question, seconds): its tab is open, open the box
     captureNeedsResource = Signal(str, str, str, int)  # (link, its title, note|question, seconds): nothing has that link yet
@@ -190,6 +195,7 @@ class TodoController(QObject):
         self._planners = {self._workspace_id: DayPlanner(self._today(), todos)}
         self._days = DayListModel(self)
         self._backlog = BacklogListModel(self)
+        self._orders: dict[WorkspaceId, tuple[str, str, bool]] = {}  # see _todo_order
         self._show(todos)
         self._resources = ResourceListModel(self)
         self._tags = TagListModel(self)
@@ -205,14 +211,14 @@ class TodoController(QObject):
             to_storage=self._to_storage,
         )
         self._open_questions.error.connect(self.notify)
-        self._knowledge_graph = KnowledgeGraphModel(
+        self._resource_graph = ResourceGraphModel(
             repo,
             lambda: self._workspace_id,
             lambda: self._cards,
             lambda: self._all_tags,
             parent=self,
         )
-        self._knowledge_graph.error.connect(self.notify)
+        self._resource_graph.error.connect(self.notify)
         self._resource_names: dict[int, str] = {}  # for inline references in todo text
         self._tag_names: dict[int, str] = {}
         self._all_tags: list[Tag] = []  # with their parents (the model only has the tree order)
@@ -396,6 +402,7 @@ class TodoController(QObject):
             return
         self._workspaces = [w for w in self._workspaces if w.id != doomed]
         self._planners.pop(doomed, None)
+        self._orders.pop(doomed, None)
         for card, workspace_id in doomed_pdfs:  # (before its folder setting is forgotten below)
             self._delete_presentation_pdf(card, workspace_id)
         if self._client is not None:
@@ -663,8 +670,8 @@ class TodoController(QObject):
         self._refresh_resources()
 
     @Property(QObject, constant=True)
-    def knowledgeGraph(self) -> KnowledgeGraphModel:
-        return self._knowledge_graph
+    def resourceGraph(self) -> ResourceGraphModel:
+        return self._resource_graph
 
     @Property(QObject, constant=True)
     def openQuestions(self) -> OpenQuestions:
@@ -1112,12 +1119,20 @@ class TodoController(QObject):
             undo_sink=self._offer_undo,
             to_storage=self._to_storage,
             connections=self._connections_for,
+            describe=self._describe_resource,
         )
         session.error.connect(self.notify)
         return session
 
     def _to_storage(self, text: str) -> str:
         return to_storage_text(text, self._resolve_reference)
+
+    def _describe_resource(self, resource_id: ResourceId) -> dict | None:
+        """Name, kind and state of a resource of the current workspace, for lists of links."""
+        card = self._cards.get(resource_id)
+        if card is None:
+            return None
+        return {"name": card.name, "kind": card.kind, "missing": card.missing}
 
     def _connections_for(self, resource_id: ResourceId) -> list[dict]:
         """The resources linked to this one in either direction (the graph of its tab): only
@@ -1231,6 +1246,66 @@ class TodoController(QObject):
 
     # ---- workspace settings (client side) ----
     RESOURCE_FOLDER_KEY = "resource_folder"
+    TIMELINE_SORT_KEY = "timeline_sort"
+    BACKLOG_SORT_KEY = "backlog_sort"
+    DONE_LAST_KEY = "timeline_done_last"
+
+    def _todo_order(self) -> tuple[str, str, bool]:
+        """(timeline sort, backlog sort, done last) of the active workspace."""
+        if self._workspace_id not in self._orders:
+            timeline, backlog, done_last = SORT_CREATED, SORT_CREATED, False
+            if self._client is not None:
+                try:
+                    get = lambda key: self._client.workspace_setting(self._workspace_id, key)
+                    timeline = get(self.TIMELINE_SORT_KEY) or timeline
+                    backlog = get(self.BACKLOG_SORT_KEY) or backlog
+                    done_last = get(self.DONE_LAST_KEY) == "1"
+                except ClientStateError:
+                    pass
+            if timeline not in SORT_MODES:
+                timeline = SORT_CREATED
+            if backlog not in SORT_MODES:
+                backlog = SORT_CREATED
+            self._orders[self._workspace_id] = (timeline, backlog, done_last)
+        return self._orders[self._workspace_id]
+
+    def _set_todo_order(self, key: str, value: str, index: int) -> None:
+        order = list(self._todo_order())
+        order[index] = value == "1" if index == 2 else value
+        self._orders[self._workspace_id] = tuple(order)  # type: ignore[assignment]
+        if self._client is not None:
+            try:
+                self._client.set_workspace_setting(self._workspace_id, key, value)
+            except ClientStateError as exc:
+                self.notify.emit(f"Couldn't save the setting: {exc}")
+        self.todoOrderChanged.emit()
+        self._refresh()
+
+    @Property(str, notify=todoOrderChanged)
+    def timelineSort(self) -> str:
+        return self._todo_order()[0]
+
+    @Property(str, notify=todoOrderChanged)
+    def backlogSort(self) -> str:
+        return self._todo_order()[1]
+
+    @Property(bool, notify=todoOrderChanged)
+    def doneLast(self) -> bool:
+        return self._todo_order()[2]
+
+    @Slot(str)
+    def setTimelineSort(self, mode: str) -> None:
+        if mode in SORT_MODES:
+            self._set_todo_order(self.TIMELINE_SORT_KEY, mode, 0)
+
+    @Slot(str)
+    def setBacklogSort(self, mode: str) -> None:
+        if mode in SORT_MODES:
+            self._set_todo_order(self.BACKLOG_SORT_KEY, mode, 1)
+
+    @Slot(bool)
+    def setDoneLast(self, done_last: bool) -> None:
+        self._set_todo_order(self.DONE_LAST_KEY, "1" if done_last else "0", 2)
 
     @Slot(result=str)
     def defaultResourceFolder(self) -> str:
@@ -1375,7 +1450,16 @@ class TodoController(QObject):
     @Slot(int, bool)
     def setDone(self, todo_id: TodoId, done: bool) -> None:
         """Done or not; a todo that is done is no longer in progress."""
-        self._mutate(lambda: self._repo.set_done(todo_id, done))
+        # A done backlog todo leaves the backlog at once, so offer to bring it back.
+        row = next((r for r in self._backlog.rows if r.id == todo_id), None) if done else None
+        if not self._mutate(lambda: self._repo.set_done(todo_id, done)) or row is None:
+            return
+        shown = to_edit_text(row.text, self._name_of).replace("\n", " ")
+        shown = shown if len(shown) <= 28 else shown[:27] + "..."
+        self._offer_undo(
+            f"Completed \"{shown}\"",
+            lambda: self._mutate(lambda: self._repo.set_done(todo_id, False)),
+        )
 
     @Slot(int, bool)
     def setPriority(self, todo_id: TodoId, priority: bool) -> None:
@@ -1420,14 +1504,6 @@ class TodoController(QObject):
     @Slot(int)
     def moveToToday(self, todo_id: TodoId) -> None:
         self._mutate(lambda: self._repo.move_to_day(todo_id, self._planner.today))
-
-    @Slot(str)
-    def moveAllToToday(self, date_iso: str) -> None:
-        """Move every uncompleted todo of a (past) day to today."""
-        day = date.fromisoformat(date_iso)
-        self._mutate(
-            lambda: self._repo.move_open_todos(self._workspace_id, day, self._planner.today)
-        )
 
     @Slot(int)
     def deleteTodo(self, todo_id: TodoId) -> None:
@@ -1537,7 +1613,7 @@ class TodoController(QObject):
     @Slot(str)
     def openLink(self, link: str) -> None:
         """A link in note text: ``resource:<id>`` opens that resource, ``tag:<id>`` shows that tag
-        (``tagRequested``: the Knowledge graph goes to it), anything else is a web address."""
+        (``tagRequested``: the Resource graph goes to it), anything else is a web address."""
         if link.startswith("resource:") and link[9:].isdigit():
             self.openResourceById(int(link[9:]))
         elif link.startswith("tag:") and link[4:].isdigit():
@@ -1718,8 +1794,21 @@ class TodoController(QObject):
 
     def _show(self, todos: list[Todo], planner: DayPlanner | None = None) -> None:
         """Fill the timeline and the backlog from one list of todos."""
-        self._days.set_rows((planner or self._planner).rows(todos))
-        self._backlog.set_rows([BacklogTodo.from_todo(t) for t in todos if t.day is None])
+        timeline_sort, backlog_sort, done_last = self._todo_order()
+        rank = self._tag_rank() if SORT_TAGS in (timeline_sort, backlog_sort) else {}
+        dated = sort_todos([t for t in todos if t.day is not None], timeline_sort, done_last, rank)
+        backlog = sort_todos([t for t in todos if t.day is None and not t.done], backlog_sort, False, rank)
+        self._days.set_rows((planner or self._planner).rows(dated))
+        self._backlog.set_rows([BacklogTodo.from_todo(t) for t in backlog])
+
+    def _tag_rank(self) -> dict[int, int]:
+        """Where each tag of the active workspace stands in the tag list (parents before their
+        sub-tags), for grouping todos by the tag they start with."""
+        try:
+            tags = self._repo.list_tags(self._workspace_id)
+        except RepositoryError:
+            return {}
+        return {row.id: i for i, row in enumerate(label_rows(tags))}
 
     def _fetch(self, workspace_id: WorkspaceId) -> list[Todo] | None:
         try:

@@ -486,6 +486,19 @@ class SqliteTodoRepository(TodoRepository):
                     (resource_id, target),
                 )
 
+    def list_mentions_of(self, resource_id: ResourceId) -> list[tuple[ResourceId, int | None]]:
+        with _translate_errors():
+            rows = self._conn.execute(
+                "SELECT resource_id, page, body FROM notes WHERE resource_id != ? AND body LIKE ?",
+                (resource_id, f"%@{{{resource_id}|%"),
+            ).fetchall()
+            found = {
+                (r["resource_id"], r["page"])
+                for r in rows
+                if resource_id in referenced_resource_ids([r["body"]])
+            }
+            return sorted(found, key=lambda m: (m[0], m[1] or 0))
+
     def list_resource_links(self, resource_id: ResourceId) -> list[tuple[ResourceId, ResourceId]]:
         with _translate_errors():
             rows = self._conn.execute(
@@ -719,6 +732,30 @@ class SqliteTodoRepository(TodoRepository):
             )
             self._sync_links_of_note(note_id)
 
+    def set_note_kind(self, note_id: NoteId, is_question: bool) -> None:
+        with _translate_errors(), self._conn:
+            row = self._conn.execute(
+                "SELECT body, is_question, parent_id FROM notes WHERE id = ?", (note_id,)
+            ).fetchone()
+            if row is None:
+                raise ValueError("No such note")
+            if row["parent_id"] is not None:
+                raise ValueError("An answer cannot change kind")
+            if bool(row["is_question"]) == is_question:
+                return
+            body = row["body"]
+            if is_question:
+                body = with_question_mark(body)
+            elif self._conn.execute(
+                "SELECT 1 FROM notes WHERE parent_id = ? LIMIT 1", (note_id,)
+            ).fetchone():
+                raise ValueError("A question with answers can't become a note")
+            self._conn.execute(
+                "UPDATE notes SET is_question = ?, body = ?, updated_at = ? WHERE id = ?",
+                (int(is_question), body, _now(), note_id),
+            )
+            self._sync_links_of_note(note_id)
+
     def _sync_links_of_note(self, note_id: NoteId) -> None:
         row = self._conn.execute("SELECT resource_id FROM notes WHERE id = ?", (note_id,)).fetchone()
         if row is not None:
@@ -860,13 +897,6 @@ class SqliteTodoRepository(TodoRepository):
         with _translate_errors(), self._conn:
             self._conn.execute(
                 "UPDATE todos SET date = ? WHERE id = ?", (day.isoformat() if day else None, todo_id)
-            )
-
-    def move_open_todos(self, workspace_id: WorkspaceId, from_day: date, to_day: date) -> None:
-        with _translate_errors(), self._conn:
-            self._conn.execute(
-                "UPDATE todos SET date = ? WHERE workspace_id = ? AND date = ? AND is_completed = 0",
-                (to_day.isoformat(), workspace_id, from_day.isoformat()),
             )
 
     def update_text(self, todo_id: TodoId, text: str) -> None:

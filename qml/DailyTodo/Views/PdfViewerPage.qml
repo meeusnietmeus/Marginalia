@@ -253,7 +253,7 @@ Item {
         boxPage = o.page || 0
         noteBoxOpen = true
         noteBox.input.text = o.text || ""
-        Qt.callLater(function () { noteBox.input.forceActiveFocus() })
+        Qt.callLater(function () { noteBox.input.grabFocus() })
     }
 
     function closeNoteBox() {
@@ -302,6 +302,14 @@ Item {
     property string searchText: ""
     property var currentMatchRects: []              // where the current match is, on its page
     property int searchCount: 0                      // matches (the model's count does not notify)
+    // "Whole word": the model only finds text, so the matches that sit inside a longer word are left
+    // out here. `okRows` are the model rows that count, `okOnPage` says per page (0-based) and
+    // index on the page whether a match counts. Both are worked out a moment after the model settles.
+    property bool wholeWord: false
+    property var okRows: []
+    property var okOnPage: ({})
+    readonly property int currentMatchNumber: !wholeWord ? searchModel.currentResult + 1
+                                                         : okRows.indexOf(searchModel.currentResult) + 1
 
     PdfSearchModel {
         id: searchModel
@@ -310,9 +318,49 @@ Item {
         onCurrentResultChanged: { view.showSearchResult(); searchTick.restart() }
         // a new search starts at its first match
         onSearchStringChanged: if (searchString !== "") currentResult = 0
-        onRowsInserted: { view.searchCount = rowCount(); searchTick.restart() }
-        onRowsRemoved: { view.searchCount = rowCount(); searchTick.restart() }
-        onModelReset: { view.searchCount = rowCount(); searchTick.restart() }
+        onRowsInserted: { view.searchCount = view.wholeWord ? view.okRows.length : rowCount(); searchTick.restart() }
+        onRowsRemoved: { view.searchCount = view.wholeWord ? view.okRows.length : rowCount(); searchTick.restart() }
+        onModelReset: { view.searchCount = view.wholeWord ? view.okRows.length : rowCount(); searchTick.restart() }
+    }
+    // One invisible item per match, only to read what stands before and after it.
+    Repeater {
+        id: searchRows
+        model: view.searchOpen && view.wholeWord ? searchModel : null
+        Item {
+            required property int page
+            required property int indexOnPage
+            required property string contextBefore
+            required property string contextAfter
+            // a letter (any script that has cases), a digit or an underscore is part of a word
+            function isWordChar(c) { return c !== "" && (c.toLowerCase() !== c.toUpperCase() || /[0-9_]/.test(c)) }
+            readonly property bool whole: !isWordChar(contextBefore.slice(-1)) && !isWordChar(contextAfter.charAt(0))
+        }
+    }
+    function updateWholeWord() {
+        const rows = []
+        const perPage = {}
+        if (wholeWord) {
+            for (let i = 0; i < searchRows.count; i++) {
+                const item = searchRows.itemAt(i)
+                if (!item) continue
+                if (item.whole) rows.push(i)
+                if (perPage[item.page] === undefined) perPage[item.page] = []
+                perPage[item.page][item.indexOnPage] = item.whole
+            }
+        }
+        okRows = rows
+        okOnPage = perPage
+        if (!wholeWord) return
+        searchCount = rows.length
+        // the current match must be one that counts (also at the start of a new search)
+        if (rows.length > 0 && rows.indexOf(searchModel.currentResult) < 0) {
+            const next = rows.find(r => r >= searchModel.currentResult)
+            searchModel.currentResult = next !== undefined ? next : rows[0]
+        }
+    }
+    onWholeWordChanged: {
+        if (!wholeWord) searchCount = searchModel.rowCount()
+        searchTick.restart()
     }
     // The pages ask the model where the matches are a moment after it has settled (it finds them
     // page by page, and the outlines of a page are only there after its rows are).
@@ -321,6 +369,7 @@ Item {
         id: searchTick
         interval: 120
         onTriggered: {
+            view.updateWholeWord()
             view.currentMatchRects = view.searchCount > 0 ? view.rectsOf(searchModel.currentResultBoundingPolygons) : []
             view.searchRevision++
         }
@@ -341,7 +390,13 @@ Item {
     function searchNext(step) {
         const n = view.searchCount
         if (n === 0) return
-        searchModel.currentResult = (searchModel.currentResult + step + n) % n
+        if (wholeWord) {
+            const at = okRows.indexOf(searchModel.currentResult)
+            const from = at >= 0 ? at : (step > 0 ? -1 : 0)
+            searchModel.currentResult = okRows[(from + step + n) % n]
+        } else {
+            searchModel.currentResult = (searchModel.currentResult + step + n) % n
+        }
         showSearchResult()
     }
     // Scroll so that the current match is in view (a third of the way down the viewport).
@@ -396,6 +451,9 @@ Item {
         property Item entry
         // answers can't be tied to a highlight (only the note or question itself)
         readonly property bool linkable: entry !== null && entry.canLink
+        // a note can become a question, an unanswered question a note; answers stay answers
+        readonly property bool convertible: entry !== null && !entry.isAnswer
+                                            && !(entry.isQuestion && entry.answered)
         readonly property bool canUseSelection: view.activeSelection !== null
                                                 && view.activeSelection.page === view.currentPage
         onEditTriggered: entry.edit()
@@ -403,6 +461,12 @@ Item {
         AppMenuItem {
             text: "Move to global"
             onTriggered: view.session.moveToGlobal(localMenu.entry.noteId)
+        }
+        AppMenuItem {
+            visible: localMenu.convertible
+            height: visible ? implicitHeight : 0
+            text: localMenu.entry && localMenu.entry.isQuestion ? "Convert to note" : "Convert to question"
+            onTriggered: view.session.setQuestion(localMenu.entry.noteId, !localMenu.entry.isQuestion)
         }
         AppMenuItem {
             visible: localMenu.linkable && localMenu.entry.highlightId < 0 && localMenu.canUseSelection
@@ -484,6 +548,12 @@ Item {
         AppMenuItem {
             text: "To local: choose a page..."
             onTriggered: pagePrompt.ask(globalMenu.entry.noteId)
+        }
+        AppMenuItem {
+            visible: globalMenu.entry !== null && !globalMenu.entry.isAnswer && !(globalMenu.entry.isQuestion && globalMenu.entry.answered)
+            height: visible ? implicitHeight : 0
+            text: globalMenu.entry && globalMenu.entry.isQuestion ? "Convert to note" : "Convert to question"
+            onTriggered: view.session.setQuestion(globalMenu.entry.noteId, !globalMenu.entry.isQuestion)
         }
     }
 
@@ -584,131 +654,25 @@ Item {
             delegate: entryDelegate
         }
 
-        // The resources this one is connected to (it mentions them, or they mention it).
-        ColumnLayout {
+        // What the page links to, and what links back to this document.
+        ConnectionsPanel {
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.preferredHeight: 1
-            spacing: 6
-
-            SectionTitle {
-                Layout.fillWidth: true
-                Layout.leftMargin: 14
-                text: "Connections"
-                badge: view.session && view.session.connections.length > 0
-                       ? String(view.session.connections.length) : ""
-                size: 22
-            }
-            ResourceGraph {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                Layout.leftMargin: 14
-                centerName: view.title
-                centerId: view.resourceId
-                onMenuRequested: (id, item, position) => view.actions.showMenu(id, item, position.x, position.y)
-                connections: view.session ? view.session.connections : []
-                onNodeClicked: (id) => view.controller.openResourceById(id)
-            }
+            session: view.session
+            controller: view.controller
+            actions: view.actions
+            currentPage: view.currentPage
+            onPageRequested: (page) => view.goToPage(page)
         }
 
-        // Bottom part: "PAGE 5 OF 21" (the number is an input; scroll it to change page), then the
-        // view controls: zoom level and wide mode together in an inset track, dark mode in one of
-        // its own, and export as a plain icon. A Flow, so they wrap when the column is narrow.
+        // Bottom part: the flowcharts of this document (and a new one) and export, as plain icons.
+        // (The page number and the view controls float over the PDF, see `viewBar`.) A Flow, so
+        // they wrap when the column is narrow.
         Flow {
             Layout.fillWidth: true
             Layout.leftMargin: 14
             spacing: 18
-
-            Row {
-                height: 34
-                spacing: 8
-                CapsLabel {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: "Page"
-                }
-                AppTextField {
-                    id: pageField
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: 46
-                    implicitHeight: 28
-                    font.pixelSize: 12
-                    font.bold: true
-                    horizontalAlignment: TextInput.AlignHCenter
-                    leftPadding: 4
-                    rightPadding: 4
-                    validator: IntValidator { bottom: 1; top: view.maxPage }
-                    inputMethodHints: Qt.ImhDigitsOnly
-                    text: view.currentPage
-                    onAccepted: {
-                        view.goToPage(parseInt(text))
-                        focus = false
-                    }
-                    onActiveFocusChanged: {
-                        if (!activeFocus) text = view.currentPage
-                        else selectAll()
-                    }
-                    Connections {
-                        target: view
-                        function onCurrentPageChanged() {
-                            if (!pageField.activeFocus) pageField.text = view.currentPage
-                        }
-                    }
-                    // Wheel down = next page, wheel up = previous page.
-                    WheelHandler {
-                        onWheel: (event) => view.goToPage(view.currentPage + (event.angleDelta.y < 0 ? 1 : -1))
-                    }
-                }
-                CapsLabel {
-                    visible: view.hasDocument
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: "of " + view.pageCount
-                }
-            }
-
-            // zoom level (click it: back to 100%) and wide mode
-            Item {
-                visible: view.hasDocument
-                width: zoomTools.width + 8
-                height: 34
-                Well { anchors.fill: parent; radius: height / 2 }
-                Row {
-                    id: zoomTools
-                    anchors.centerIn: parent
-                    spacing: 2
-                    AppButton {
-                        compact: true
-                        implicitHeight: 26
-                        text: Math.round(view.zoom * 100) + "%"
-                        font.pixelSize: 12
-                        textColor: Theme.textMuted
-                        onClicked: view.zoomBy(1 / view.zoom, pages.width / 2, pages.height / 2)
-                    }
-                    IconButton {
-                        compact: true
-                        implicitHeight: 26
-                        iconSource: view.wide ? Theme.iconShrink : Theme.iconExpand
-                        active: view.wide
-                        onClicked: view.wide = !view.wide
-                    }
-                }
-            }
-
-            // dark mode
-            Item {
-                visible: view.hasDocument
-                width: 34
-                height: 34
-                Well { anchors.fill: parent; radius: height / 2 }
-                IconButton {
-                    anchors.centerIn: parent
-                    compact: true
-                    implicitHeight: 26
-                    implicitWidth: 26
-                    iconSource: Theme.iconMoon
-                    active: view.dark
-                    onClicked: view.dark = !view.dark
-                }
-            }
 
             // The flowcharts attached to this document, and a new one: a plain icon, with a count.
             IconButton {
@@ -810,6 +774,152 @@ Item {
             }
         }
     }
+    // ------------------------------------------------------- page and view controls
+    // Floats over the top of the PDF: out of sight until the pointer comes near the top edge (a
+    // document without pages to show, the notes tab of a web link, keeps it in view: that is where
+    // the page is typed).
+    Item {
+        id: viewBar
+        z: 8
+        width: view.centerWidth
+        height: 76
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.top: parent.top
+
+        readonly property bool shown: !view.hasDocument || zoneHover.hovered || barHover.hovered
+                                      || pageField.activeFocus
+        HoverHandler { id: zoneHover }
+
+        Item {
+            id: barPanel
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: viewBar.shown ? 12 : -4
+            width: barRow.implicitWidth + 24
+            height: barRow.implicitHeight + 16
+            opacity: viewBar.shown ? 1 : 0
+            visible: opacity > 0
+            Behavior on opacity { NumberAnimation { duration: Theme.listEnterDuration; easing.type: Easing.OutCubic } }
+            Behavior on y { NumberAnimation { duration: Theme.listEnterDuration; easing.type: Easing.OutCubic } }
+
+            GlassPanel {
+                anchors.fill: parent
+                radius: height / 2
+                backdrop: view.hasDocument ? pages : null
+            }
+            HoverHandler { id: barHover }
+
+            Row {
+                id: barRow
+                anchors.centerIn: parent
+                spacing: 14
+                Row {
+                    height: 34
+                    spacing: 8
+                    CapsLabel {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "Page"
+                    }
+                    AppTextField {
+                        id: pageField
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 46
+                        implicitHeight: 28
+                        font.pixelSize: 12
+                        font.bold: true
+                        horizontalAlignment: TextInput.AlignHCenter
+                        leftPadding: 4
+                        rightPadding: 4
+                        validator: IntValidator { bottom: 1; top: view.maxPage }
+                        inputMethodHints: Qt.ImhDigitsOnly
+                        text: view.currentPage
+                        onAccepted: {
+                            view.goToPage(parseInt(text))
+                            focus = false
+                        }
+                        onActiveFocusChanged: {
+                            if (!activeFocus) text = view.currentPage
+                            else selectAll()
+                        }
+                        Connections {
+                            target: view
+                            function onCurrentPageChanged() {
+                                if (!pageField.activeFocus) pageField.text = view.currentPage
+                            }
+                        }
+                        // Wheel down = next page, wheel up = previous page.
+                        WheelHandler {
+                            onWheel: (event) => view.goToPage(view.currentPage + (event.angleDelta.y < 0 ? 1 : -1))
+                        }
+                    }
+                    CapsLabel {
+                        visible: view.hasDocument
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "of " + view.pageCount
+                    }
+                }
+
+                Rectangle {                                // a thin divider between the groups
+                    visible: view.hasDocument
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 1
+                    height: 20
+                    color: Theme.hairlineStrong
+                }
+                // zoom level (click it: back to 100%) and wide mode
+                Item {
+                    visible: view.hasDocument
+                    width: zoomTools.width + 8
+                    height: 34
+                    Well { anchors.fill: parent; radius: height / 2 }
+                    Row {
+                        id: zoomTools
+                        anchors.centerIn: parent
+                        spacing: 2
+                        AppButton {
+                            compact: true
+                            implicitHeight: 26
+                            text: Math.round(view.zoom * 100) + "%"
+                            font.pixelSize: 12
+                            textColor: Theme.textMuted
+                            onClicked: view.zoomBy(1 / view.zoom, pages.width / 2, pages.height / 2)
+                        }
+                        IconButton {
+                            compact: true
+                            implicitHeight: 26
+                            iconSource: view.wide ? Theme.iconShrink : Theme.iconExpand
+                            active: view.wide
+                            onClicked: view.wide = !view.wide
+                        }
+                    }
+                }
+
+                Rectangle {                                // a thin divider between the groups
+                    visible: view.hasDocument
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 1
+                    height: 20
+                    color: Theme.hairlineStrong
+                }
+                // dark mode
+                Item {
+                    visible: view.hasDocument
+                    width: 34
+                    height: 34
+                    Well { anchors.fill: parent; radius: height / 2 }
+                    IconButton {
+                        anchors.centerIn: parent
+                        compact: true
+                        implicitHeight: 26
+                        implicitWidth: 26
+                        iconSource: Theme.iconMoon
+                        active: view.dark
+                        onClicked: view.dark = !view.dark
+                    }
+                }
+            }
+        }
+    }
+
     // ----------------------------------------------------------------- centre column
     // The PDF stands in front of the side columns: a raised panel behind it, throwing a wide
     // shadow onto them, and drawn above them (the side columns are at z 0).
@@ -1094,8 +1204,13 @@ Item {
                     z: 2
                     property var rects: []
                     function refresh() {
-                        rects = view.searchOpen && view.searchCount > 0
-                                ? view.rectsOf(searchModel.boundingPolygonsOnPage(pageItem.index)) : []
+                        if (!view.searchOpen || view.searchCount === 0) { rects = []; return }
+                        let polygons = searchModel.boundingPolygonsOnPage(pageItem.index)
+                        const ok = view.wholeWord ? view.okOnPage[pageItem.index] : undefined
+                        // (one polygon per match; if they don't line up, show them all)
+                        if (ok !== undefined && ok.length === polygons.length)
+                            polygons = polygons.filter((p, i) => ok[i])
+                        rects = view.rectsOf(polygons)
                     }
                     Connections {
                         target: searchModel
@@ -1483,6 +1598,13 @@ Item {
                 contentHeight: slideColumn.height
                 ScrollBar.vertical: AppScrollBar {}
 
+                // a new slide / page starts at the top of its notes
+                Connections {
+                    target: view
+                    function onCurrentPageChanged() { slideFlick.contentY = 0 }
+                    function onSlideInfoChanged() { slideFlick.contentY = 0 }
+                }
+
                 CapsLabel {
                     visible: view.slideInfo === null
                     width: slideFlick.width - 10
@@ -1606,11 +1728,20 @@ Item {
                     }
                 }
             }
+            AppButton {
+                id: wholeWordButton
+                compact: true
+                text: "Whole word"
+                font.pixelSize: 12
+                active: view.wholeWord
+                onClicked: { view.wholeWord = !view.wholeWord; searchField.forceActiveFocus() }
+                AppToolTip { text: "Only match whole words"; shown: wholeWordButton.hovered }
+            }
             // "3 / 17" (the first match is the current one), or that there is none
             CapsLabel {
                 text: view.searchText === "" ? ""
                       : view.searchCount === 0 ? "No results"
-                      : (searchModel.currentResult + 1) + " / " + view.searchCount
+                      : view.currentMatchNumber + " / " + view.searchCount
                 color: view.searchText !== "" && view.searchCount === 0 ? Theme.danger : Theme.textMuted
             }
             IconButton {

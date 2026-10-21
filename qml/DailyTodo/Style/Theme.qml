@@ -46,7 +46,7 @@ QtObject {
     function highlightBar(key) { return key === "none" ? textFaint : highlightColor(key) }
     readonly property color selection: "#4d99ff"
 
-    // ---- knowledge graph: one colour per area (cycles when there are more areas) ----
+    // ---- resource graph: one colour per area (cycles when there are more areas) ----
     readonly property var areaColors: ["#e0826a", "#e0b152", "#8cc063", "#4fb3a9", "#5fa8d9",
                                        "#9a8fe0", "#c07bd0", "#e07ba5", "#b59a6a", "#7fc7c7"]
     function areaColor(index) { return index < 0 ? textFaint : areaColors[index % areaColors.length] }
@@ -135,6 +135,12 @@ QtObject {
     // ---- behaviour ----
     // How long (ms) the pointer must rest on a day's "add todo" row before it fades in.
     readonly property int revealDelay: 50
+
+    // List entries appearing / leaving (notes, questions): quick, but not instant
+    readonly property int listEnterDuration: 180
+    readonly property int listExitDuration: 120
+    readonly property int listMoveDuration: 180
+    readonly property real listEnterRise: 8        // px an entry rises while it fades in
     // Mouse-wheel / touchpad scroll speed in the todo list, relative to Qt's default (1 = default).
     readonly property real scrollSpeed: 1.0
 

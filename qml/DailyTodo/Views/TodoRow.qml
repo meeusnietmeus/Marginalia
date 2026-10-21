@@ -17,9 +17,6 @@ RowLayout {
     readonly property bool inProgress: todo.inProgress === true && !todo.done
     property bool muted: false             // e.g. a past day: dimmer text
     property bool canMoveToToday: false
-    property bool moveHighlighted: false   // light the move button up (hovering "move all to today")
-    property bool reserveMoveSlot: false   // keep the move button's space free even when it is hidden
-    property alias moveButton: moveButton
     property bool editing: false
     property bool inBacklog: false         // a todo without a date: the menu offers the opposite move
     readonly property bool menuOpen: todoMenu.visible || (pickerLoader.item !== null && pickerLoader.item.opened)
@@ -45,7 +42,7 @@ RowLayout {
         editOriginal = controller ? controller.toEditText(todo.text) : todo.text
         editField.text = editOriginal
         Qt.callLater(function () {
-            editField.forceActiveFocus()
+            editField.grabFocus()
             editField.selectAll()
         })
     }
@@ -129,6 +126,13 @@ RowLayout {
             }
             AppMenuSeparator {}
 
+            AppMenuItem {
+                visible: row.canMoveToToday
+                height: visible ? implicitHeight : 0
+                text: "Move to today"
+                iconSource: Theme.iconMoveToToday
+                onTriggered: row.moveToTodayRequested()
+            }
             // A backlog todo can only go to the timeline; a dated one to the backlog or another day.
             AppMenuItem {
                 visible: !row.inBacklog
@@ -188,25 +192,39 @@ RowLayout {
     }
 
     // ---- row actions ----
-    // Missed todo -> move it to today (yellow on hover)
-    Item {
-        visible: !row.editing && row.reserveMoveSlot && !row.canMoveToToday
-        implicitWidth: 24
-        implicitHeight: 24
-    }
-    RowActionButton {
-        id: moveButton
+    // A missed todo: a quiet "Today" chip that appears while the row is hovered.
+    Rectangle {
+        id: todayChip
         visible: !row.editing && row.canMoveToToday
-        forceLit: row.moveHighlighted
-        baseColor: Theme.window
-        iconSource: Theme.iconMoveToToday
-        fallbackText: "→"
-        tint: Theme.warning
-        onClicked: row.moveToTodayRequested()
+        Layout.alignment: Qt.AlignVCenter
+        implicitWidth: chipRow.implicitWidth + 16
+        implicitHeight: 24
+        radius: height / 2
+        color: Qt.alpha(Theme.warning, chipHover.hovered ? 0.2 : 0.1)
+        border.width: 1
+        border.color: Qt.alpha(Theme.warning, chipHover.hovered ? 0.7 : 0.35)
+        opacity: rowHover.hovered || chipHover.hovered || row.menuOpen ? 1 : 0
+        Behavior on opacity { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+        Behavior on color { ColorAnimation { duration: 120 } }
 
-        AppToolTip {
-            text: "Move to today"
-            shown: moveButton.hovered
+        Row {
+            id: chipRow
+            anchors.centerIn: parent
+            spacing: 5
+            IconImage {
+                anchors.verticalCenter: parent.verticalCenter
+                source: Theme.iconMoveToToday
+                sourceSize: Qt.size(13, 13)
+                color: Theme.warning
+            }
+            CapsLabel {
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Today"
+                color: Theme.warning
+            }
         }
+        HoverHandler { id: chipHover; cursorShape: Qt.PointingHandCursor }
+        ClickHandler { onTapped: row.moveToTodayRequested() }
     }
+    HoverHandler { id: rowHover }
 }

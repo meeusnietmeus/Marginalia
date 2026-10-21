@@ -6,7 +6,7 @@ import DailyTodo.Style
 //   * a resource is normal-coloured text with a dotted underline (click to open it, like a card
 //     in the library)
 //   * a tag is normal-coloured text on a slightly lighter background, like a chip (click to see
-//     it in the Knowledge graph)
+//     it in the Resource graph)
 //   * a reference to something that was deleted stays as dim, struck-through text
 // **bold**, *italic*, "- " bullets, `code` and $formulas$ are drawn from the raw text (core/markdown.py).
 // A web address, written bare or as [name](address), is a link too (accent coloured).
@@ -155,7 +155,7 @@ TextEdit {
     selectByMouse: false
     color: baseColor
 
-    // A resource opens like its card in the library, a tag in the Knowledge graph, a web address
+    // A resource opens like its card in the library, a tag in the Resource graph, a web address
     // in the browser.
     onLinkActivated: (link) => {
         if (controller)

@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import ctypes
+import faulthandler
+import gc
 import sys
 from pathlib import Path
 
@@ -53,12 +55,35 @@ def _create_qt_app(qt_args: list[str]) -> QGuiApplication:
     return app
 
 
+def _guard_against_native_crashes(data_dir: Path) -> None:
+    """Two things for the rare access violation inside Qt6Core after hours of running.
+
+    * faulthandler writes the Python stack of every thread to ``crash.log`` when it happens (pythonw
+      has no console, so otherwise the app just vanishes).
+    * Python's cyclic garbage collector runs on whichever thread allocates when its threshold is
+      hit. If that is a worker (title / thumbnail / graph threads) it can finalise Qt wrapper
+      objects off the main thread, which crashes inside Qt. So automatic collection is switched
+      off and a main-thread timer collects instead.
+    """
+    try:
+        log = open(data_dir / "crash.log", "a", buffering=1)  # kept open for the process' lifetime
+        faulthandler.enable(log, all_threads=True)
+    except OSError:
+        pass
+    gc.disable()
+    collector = QTimer(QGuiApplication.instance())
+    collector.setInterval(10_000)
+    collector.timeout.connect(gc.collect)
+    collector.start()
+
+
 def run(argv: list[str] | None = None) -> int:
     config, qt_args = parse_args(sys.argv[1:] if argv is None else argv)
     _set_windows_app_id()
     app = _create_qt_app(qt_args)
 
     db_path = config.db_path or default_db_path()
+    _guard_against_native_crashes(db_path.parent)
     # Already running on this database: hand it the link (or just bring it to the front) and stop.
     instance = SingleInstance(server_name(db_path), parent=app)
     if instance.send_to_running(config.open_link):

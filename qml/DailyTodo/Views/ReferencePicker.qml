@@ -126,10 +126,27 @@ Item {
     // it becomes `@{Name of the new resource}`, or disappears when nothing gets created.
     property int createAt: -1
 
+    // The resource whose page (or notes, or card) this text box is on: found by looking up the
+    // tree for the nearest item with a `resourceId`. -1 for a text box that isn't on one (a todo).
+    function parentResourceId() {
+        for (let item = target; item; item = item.parent) {
+            if (item.resourceId !== undefined && item.resourceId >= 0)
+                return item.resourceId
+        }
+        return -1
+    }
+    // A resource made from within another one starts with that one's tags.
+    function openCreateDialog(dialog) {
+        dialog.openNew()
+        const parent = parentResourceId()
+        const info = parent >= 0 && controller ? controller.resourceInfo(parent) : {}
+        if (info.tagIds) dialog.selectedTags = Array.from(info.tagIds)
+    }
+
     function startCreate() {
         createAt = start
         close()
-        if (dialogLoader.item) dialogLoader.item.openNew()
+        if (dialogLoader.item) openCreateDialog(dialogLoader.item)
         else dialogLoader.active = true                // onLoaded opens it
     }
 
@@ -158,7 +175,7 @@ Item {
             }
             onClosed: if (picker.createAt >= 0) picker.replaceNew("")     // cancelled
         }
-        onLoaded: item.openNew()
+        onLoaded: picker.openCreateDialog(item)
     }
 
     function close() {
