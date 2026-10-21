@@ -1,10 +1,12 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Dialogs
 import DailyTodo.Style
 import DailyTodo.Controls
 
-// Modal for the active workspace: rename it, choose how its todos are ordered, or delete it (with a
+// Modal for the active workspace: rename it, move its folder (the files go along, after a
+// confirmation showing what will happen), choose how its todos are ordered, or delete it (with a
 // confirmation step).
 AppDialog {
     id: dialog
@@ -14,6 +16,9 @@ AppDialog {
     property bool confirming: false
     property string resourceFolder          // native path of the workspace's folder, "" = none
 
+    property var controller: null
+    property string newFolder: ""             // a folder picked to move the workspace to...
+    property var moveInfo: ({})               // ...and what moving there would do (previewFolderRetarget)
     property string timelineSort: "created"   // "created" | "priority" | "tags"
     property string backlogSort: "created"
     property bool doneLast: false
@@ -34,11 +39,24 @@ AppDialog {
         close()
     }
 
-    width: Math.min(380, parent.width - 40)
+    width: Math.min(parent.width - 40, Math.max(460, parent.width * 0.4))
 
     onAboutToShow: {
         field.text = workspaceName
         confirming = false
+        newFolder = ""
+    }
+    onResourceFolderChanged: newFolder = ""   // it moved (or the dialog was filled in again)
+
+    FolderDialog {
+        id: folderDialog
+        title: "New folder for the workspace"
+        currentFolder: dialog.resourceFolder !== "" && dialog.controller
+                       ? dialog.controller.fileUrl(dialog.resourceFolder) : ""
+        onAccepted: {
+            dialog.newFolder = dialog.controller.localPath(selectedFolder)
+            dialog.moveInfo = dialog.controller.previewFolderRetarget(dialog.newFolder)
+        }
     }
     onOpened: {
         field.forceActiveFocus()
@@ -99,6 +117,51 @@ AppDialog {
                     text: "Open in File Explorer"
                     enabled: dialog.resourceFolder !== ""
                     onClicked: dialog.openFolderRequested()
+                }
+                AppButton {
+                    text: "Retarget..."
+                    enabled: dialog.controller !== null
+                    onClicked: folderDialog.open()
+                }
+            }
+
+            // what moving the folder would do, to confirm
+            ColumnLayout {
+                visible: dialog.newFolder !== ""
+                spacing: 8
+                Layout.fillWidth: true
+                Label {
+                    text: dialog.moveInfo.ok === true
+                          ? "Move the workspace folder to " + dialog.newFolder + "? "
+                            + dialog.moveInfo.count + (dialog.moveInfo.count === 1 ? " file is" : " files are")
+                            + " moved there and their links updated"
+                            + (dialog.moveInfo.missing > 0
+                               ? " (" + dialog.moveInfo.missing + " link"
+                                 + (dialog.moveInfo.missing === 1 ? "" : "s") + " whose file is missing only change)"
+                               : "")
+                            + ". Resources outside the folder stay where they are."
+                          : (dialog.moveInfo.error || "")
+                    font.pixelSize: 12
+                    color: dialog.moveInfo.ok === true ? Theme.textMuted : Theme.danger
+                    wrapMode: Text.Wrap
+                    Layout.fillWidth: true
+                }
+                RowLayout {
+                    spacing: 8
+                    Item { Layout.fillWidth: true }
+                    AppButton {
+                        text: "Cancel"
+                        onClicked: dialog.newFolder = ""
+                    }
+                    AppButton {
+                        visible: dialog.moveInfo.ok === true
+                        text: "Move"
+                        filled: true
+                        onClicked: {
+                            dialog.controller.retargetWorkspaceFolder(dialog.newFolder)
+                            dialog.newFolder = ""
+                        }
+                    }
                 }
             }
         }

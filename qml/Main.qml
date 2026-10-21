@@ -419,6 +419,7 @@ ApplicationWindow {
             return w ? w.name : ""
         }
         canDelete: root.controller.workspaces.length > 1
+        controller: root.controller
         resourceFolder: root.settingsFolder
         timelineSort: root.controller.timelineSort
         backlogSort: root.controller.backlogSort
@@ -514,6 +515,7 @@ ApplicationWindow {
         function onCaptureNeedsResource(link, title, kind, seconds) { captureDialog.ask(link, title, kind, seconds) }
         // its notes went with it: the tab could only show errors now
         function onResourceRemoved(resourceId) { root.closeTabsOf(resourceId) }
+        function onWorkspaceFolderChanged() { root.settingsFolder = root.controller.defaultResourceFolder() }
         // its PDF is being replaced: a tab would keep the old file locked
         function onResourceTabsShouldClose(resourceId) { root.closeTabsOf(resourceId) }
         function onUndoOffered(token, message) {

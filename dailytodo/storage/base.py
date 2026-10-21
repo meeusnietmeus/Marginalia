@@ -75,6 +75,10 @@ class TodoRepository(ABC):
         """Change the URI, name and tags (replaced as a whole). Does not count as a use."""
 
     @abstractmethod
+    def retarget_resources(self, links: dict[ResourceId, str]) -> None:
+        """Give each resource its new link (id -> uri), all of them or none."""
+
+    @abstractmethod
     def touch_resource(self, resource_id: ResourceId) -> None:
         """Record that the resource was just opened (sets ``last_used_at``; an "unopened"
         resource becomes "opened", any other status stays)."""

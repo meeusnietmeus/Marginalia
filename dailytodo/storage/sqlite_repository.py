@@ -407,6 +407,11 @@ class SqliteTodoRepository(TodoRepository):
             )
             self._set_resource_tags(resource_id, tag_ids)
 
+    def retarget_resources(self, links: dict[ResourceId, str]) -> None:
+        with _translate_errors(), self._conn:  # one transaction: all or none
+            for resource_id, uri in links.items():
+                self._conn.execute("UPDATE resources SET uri = ? WHERE id = ?", (uri, resource_id))
+
     def touch_resource(self, resource_id: ResourceId) -> None:
         with _translate_errors(), self._conn:
             # opening an unopened resource makes it "opened"; any other status stays as it is

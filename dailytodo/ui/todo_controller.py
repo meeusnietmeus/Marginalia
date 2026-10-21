@@ -33,6 +33,8 @@ from ..core import (
     STATUS_LABELS,
     UNIFIED_FILTERS,
     sort_todos,
+    folder_problem,
+    plan_folder_move,
     DayPlanner,
     ResourceCard,
     ResourceId,
@@ -129,6 +131,7 @@ class TodoController(QObject):
 
     notify = Signal(str)  # short messages for the UI to show as a toast
     workspaceChanged = Signal()
+    workspaceFolderChanged = Signal()  # the active workspace's folder was moved
     todoOrderChanged = Signal()  # the sort order of the timeline or the backlog (or "done last")
     workspacesChanged = Signal()
     # Answer to fetchTitle: (url, page title or "", error message or "")
@@ -335,7 +338,7 @@ class TodoController(QObject):
     @Slot(str, str)
     def createWorkspace(self, name: str, folder: str = "") -> None:
         """Add a workspace and switch to it. A workspace needs a folder (made if it isn't there):
-        the files of its resources live there, and it can't be changed afterwards."""
+        the files of its resources live there (see ``retargetWorkspaceFolder`` for changing it)."""
         name = name.strip()
         folder = folder.strip()
         if not name:
@@ -1319,6 +1322,108 @@ class TodoController(QObject):
             return self._client.workspace_setting(workspace_id, self.RESOURCE_FOLDER_KEY) or ""
         except ClientStateError:
             return ""
+
+    # ---- moving the workspace folder ----
+    def _folder_plan(self, new_folder: str):
+        old = self.defaultResourceFolder()
+        resources = [(c.id, c.uri, c.is_path, c.kind) for c in self._cards.values()]
+        return old, plan_folder_move(old, new_folder, resources)
+
+    @Slot(str, result="QVariantMap")
+    def previewFolderRetarget(self, new_folder: str) -> dict:
+        """What moving the workspace folder to ``new_folder`` would do, for the confirmation:
+        {"ok", "error", "count" (files that move), "missing" (links whose file isn't there)}."""
+        new_folder = new_folder.strip()
+        old = self.defaultResourceFolder()
+        problem = folder_problem(old, new_folder)
+        if problem:
+            return {"ok": False, "error": problem, "count": 0, "missing": 0}
+        if self._exporting:
+            return {"ok": False, "error": "A presentation is still being prepared: try again in a moment",
+                    "count": 0, "missing": 0}
+        _, plan = self._folder_plan(new_folder)
+        clashes = [Path(i.target).name for i in plan.items
+                   if Path(i.source).is_file() and Path(i.target).exists()]
+        if clashes:
+            more = f" (and {len(clashes) - 1} more)" if len(clashes) > 1 else ""
+            return {"ok": False, "error": f"\"{clashes[0]}\"{more} already exists in the new folder",
+                    "count": 0, "missing": 0}
+        present = [i for i in plan.items if Path(i.source).is_file()]
+        return {"ok": True, "error": "", "count": len(present), "missing": len(plan.items) - len(present)}
+
+    @Slot(str)
+    def retargetWorkspaceFolder(self, new_folder: str) -> None:
+        """Make ``new_folder`` the workspace's folder: every file of a resource inside the old one
+        (and the PDFs made from presentations) is moved there, keeping its place in the folder,
+        and the links of those resources are updated. All or nothing: if a file can't be moved, or
+        the database refuses, what was done is undone and everything stays where it was."""
+        new_folder = new_folder.strip()
+        preview = self.previewFolderRetarget(new_folder)
+        if not preview["ok"]:
+            self.notify.emit(preview["error"])
+            return
+        old, plan = self._folder_plan(new_folder)
+        try:
+            Path(new_folder).mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            self.notify.emit(f"Couldn't use that folder: {exc}")
+            return
+        for item in plan.items:  # an open tab keeps its file locked
+            self.resourceTabsShouldClose.emit(item.resource_id)
+        # Give the tabs a moment to let go of their files (the same wait as deleting a PDF).
+        QTimer.singleShot(400, lambda: self._move_folder(old, new_folder, plan, 10))
+
+    def _move_folder(self, old: str, new_folder: str, plan, tries: int) -> None:
+        done: list[tuple[str, str]] = []
+
+        def undo_moves() -> None:
+            for source, target in reversed(done):
+                try:
+                    Path(source).parent.mkdir(parents=True, exist_ok=True)
+                    shutil.move(target, source)
+                except OSError:
+                    pass
+            done.clear()
+
+        try:
+            for item in plan.items:
+                if not Path(item.source).is_file():
+                    continue  # a link whose file is gone: only the link moves
+                Path(item.target).parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(item.source, item.target)  # also across drives
+                done.append((item.source, item.target))
+        except OSError as exc:
+            undo_moves()
+            if tries > 0 and isinstance(exc, PermissionError):  # still locked by a closing tab
+                QTimer.singleShot(300, lambda: self._move_folder(old, new_folder, plan, tries - 1))
+                return
+            self.notify.emit(f"Couldn't move the files, nothing was changed: {exc.strerror or exc}")
+            return
+        links = plan.link_updates
+        try:
+            self._repo.retarget_resources(links)
+        except RepositoryError as exc:
+            undo_moves()
+            self.notify.emit(f"Couldn't update the links, nothing was changed: {exc}")
+            return
+        if self._client is not None:
+            try:
+                self._client.set_workspace_setting(
+                    self._workspace_id, self.RESOURCE_FOLDER_KEY, new_folder
+                )
+            except ClientStateError as exc:
+                undo = {i.resource_id: i.source for i in plan.items if i.link}
+                try:
+                    self._repo.retarget_resources(undo)
+                except RepositoryError:
+                    pass
+                undo_moves()
+                self.notify.emit(f"Couldn't save the new folder, nothing was changed: {exc}")
+                return
+        self._refresh_resources()
+        self.workspaceFolderChanged.emit()
+        moved = len(done)
+        self.notify.emit(f"Workspace folder moved ({moved} file{'s' if moved != 1 else ''})")
 
     @Slot(str)
     def setDefaultResourceFolder(self, path: str) -> None:
