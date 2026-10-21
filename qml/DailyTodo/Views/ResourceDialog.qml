@@ -287,14 +287,13 @@ AppDialog {
         }
 
         // Many files at once: a window of its own (drop them, check the list, one set of tags).
-        Text {
+        AppButton {
             visible: dialog.offerImport && !dialog.editing && dialog.mode === "file"
+            compact: true
             text: "Import several files at once..."
-            font.pixelSize: 12
-            color: Theme.accent
-            font.underline: importHover.hovered
-            HoverHandler { id: importHover; cursorShape: Qt.PointingHandCursor }
-            ClickHandler { onTapped: dialog.importRequested() }
+            textColor: Theme.accent
+            Layout.alignment: Qt.AlignLeft
+            onClicked: dialog.importRequested()
         }
 
         // A file from somewhere else: offer to bring it into the workspace's folder.
