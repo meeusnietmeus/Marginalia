@@ -10,6 +10,7 @@ import DailyTodo.Controls
 //
 //   actions.showMenu(resourceId, item, x, y)   right-click on a resource (x, y in item's coordinates)
 //   actions.create()                           the "New resource" dialog
+//   actions.importFiles(paths)                 the "Import files" dialog, with these files (or empty)
 //   actions.edit(resourceId)                   the edit dialog (also: a file that went missing)
 Item {
     id: actions
@@ -29,6 +30,7 @@ Item {
         menu.popup(item, x, y)
     }
     function create() { dialog.openNew() }
+    function importFiles(paths) { bulkImport.openWith(paths || []) }
     function edit(resourceId) {
         const r = controller.resourceInfo(resourceId)
         if (r.id !== undefined) dialog.openFor(r.id, r.uri, r.isPath, r.tagIds, r.name)
@@ -77,9 +79,16 @@ Item {
         }
     }
 
+    BulkImportDialog {
+        id: bulkImport
+        controller: actions.controller
+    }
+
     ResourceDialog {
         id: dialog
         controller: actions.controller
+        offerImport: true
+        onImportRequested: { dialog.close(); actions.importFiles([]) }
         onCreateRequested: (uri, name, tagIds, moveFile) =>
             actions.controller.addResource(uri, name, tagIds, moveFile)
         onUpdateRequested: (id, uri, name, tagIds) => {

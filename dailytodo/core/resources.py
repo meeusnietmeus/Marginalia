@@ -73,6 +73,13 @@ class ResourceCard:
     attached_to: ResourceId | None = None  # a flowchart: the document it is about
 
 
+def file_kind(path: str) -> ResourceKind:
+    """What kind of resource a local file is, by its extension."""
+    filename = _last_segment(path)
+    dot = filename.rfind(".")
+    return _FILE_KINDS.get(filename[dot:].lower(), "file") if dot > 0 else "file"
+
+
 def is_inside(path: str, folder: str) -> bool:
     """Is a file somewhere in a folder (at any depth)? Compared the way Windows does it: not case
     sensitive, slashes and backslashes alike."""
@@ -154,9 +161,7 @@ def describe(
     title = _truncate(name)
     tags = list(tag_ids)
     if is_local_path(uri):
-        filename = _last_segment(uri) or uri
-        dot = filename.rfind(".")
-        kind = _FILE_KINDS.get(filename[dot:].lower(), "file") if dot > 0 else "file"
+        kind = file_kind(uri)
         return ResourceCard(
             resource.id, name, uri, kind, title, True, not exists(uri), tags,
             resource.created_at, resource.last_used_at, resource.status, resource.attached_to,

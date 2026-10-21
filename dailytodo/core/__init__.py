@@ -17,6 +17,7 @@ from .models import (
     Workspace,
     WorkspaceId,
 )
+from .bulk_import import DUPLICATE, ImportItem, plan_import
 from .folder_move import BACKUPS, folder_problem, plan_folder_move
 from .notes import with_question_mark
 from .todo_sort import SORT_CREATED, SORT_MODES, SORT_PRIORITY, SORT_TAGS, leading_tag, sort_todos
@@ -100,6 +101,9 @@ from .resources import (
 )
 
 __all__ = [
+    "DUPLICATE",
+    "ImportItem",
+    "plan_import",
     "BACKUPS",
     "folder_problem",
     "plan_folder_move",

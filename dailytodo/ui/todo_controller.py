@@ -34,6 +34,8 @@ from ..core import (
     UNIFIED_FILTERS,
     sort_todos,
     BACKUPS,
+    DUPLICATE,
+    plan_import,
     folder_problem,
     plan_folder_move,
     DayPlanner,
@@ -613,26 +615,85 @@ class TodoController(QObject):
         folder = self.defaultResourceFolder()
         return not folder or is_inside(path, folder)
 
-    def _move_into_workspace_folder(self, path: str) -> str | None:
+    def _move_into_workspace_folder(self, path: str, quiet: bool = False) -> str | None:
         """Cut the file and paste it in the workspace's folder. Returns its new path, or None when
-        it stayed where it was (with a message why)."""
+        it stayed where it was (with a message why, unless ``quiet``)."""
         folder = self.defaultResourceFolder()
         source = Path(path)
         if not folder or not source.is_file() or is_inside(path, folder):
             return None
         target = Path(folder) / source.name
         if target.exists():
-            self.notify.emit(
-                f"\"{source.name}\" is already in the workspace folder: the file was left where it was"
-            )
+            if not quiet:
+                self.notify.emit(
+                    f"\"{source.name}\" is already in the workspace folder: the file was left where it was"
+                )
             return None
         try:
             Path(folder).mkdir(parents=True, exist_ok=True)
             shutil.move(str(source), str(target))  # also across drives
         except OSError as exc:
-            self.notify.emit(f"Couldn't move the file to the workspace folder: {exc}")
+            if not quiet:
+                self.notify.emit(f"Couldn't move the file to the workspace folder: {exc}")
             return None
         return str(target)
+
+    # ---- importing many files at once ----
+    @staticmethod
+    def _as_path(value: str) -> str:
+        """A path from QML: a ``file:///`` url (a drop, a file dialog) or a native path."""
+        value = str(value).strip()
+        if value.lower().startswith("file:"):
+            return QDir.toNativeSeparators(QUrl(value).toLocalFile())
+        return value
+
+    @Slot("QVariantList", "QVariantList", result="QVariantList")
+    def previewImport(self, paths: list, already_listed: list) -> list:
+        """The rows of the import list for these files and folders (a folder brings the files in
+        it): {path, name, kind, folder, duplicate}. ``duplicate``: already a resource of this
+        workspace, or already in the list."""
+        existing = [c.uri for c in self._cards.values() if c.is_path]
+        items = plan_import(
+            [self._as_path(p) for p in paths], existing, [self._as_path(p) for p in already_listed]
+        )
+        return [{"path": i.path, "name": i.name, "kind": i.kind, "folder": i.folder,
+                 "duplicate": i.status == DUPLICATE} for i in items]
+
+    @Slot("QVariantList", "QVariantList", bool, result="QVariantMap")
+    def importResources(self, items: list, tag_ids: list | None = None, move_file: bool = False) -> dict:
+        """Make a resource of every item ({path, name}) with the same tags. With ``move_file``
+        the files outside the workspace's folder are moved into it (one that can't be, because
+        of a file with that name there, stays where it is). Returns {added, failed, moved}."""
+        tags = _ids(tag_ids)
+        added = failed = moved = 0
+        for item in items:
+            path = self._as_path(item.get("path", ""))
+            name = str(item.get("name", "")).strip() or suggest_name(path)
+            if not path or not is_local_path(path) or not Path(path).is_file():
+                failed += 1
+                continue
+            uri = path
+            if move_file:
+                target = self._move_into_workspace_folder(path, quiet=True)
+                if target is not None:
+                    uri = target
+                    moved += 1
+            try:
+                self._repo.add_resource(self._workspace_id, uri, name, tags)
+            except RepositoryError:
+                failed += 1
+                if uri != path:  # nothing was added: put the file back
+                    try:
+                        shutil.move(uri, path)
+                        moved -= 1
+                    except OSError:
+                        pass
+                continue
+            added += 1
+        self._refresh_resources()
+        text = f"Imported {added} resource{'s' if added != 1 else ''}"
+        self.notify.emit(text + (f" ({failed} failed)" if failed else ""))
+        return {"added": added, "failed": failed, "moved": moved}
 
     @Slot(str, str, "QVariantList", bool, result=str)
     def addResource(
