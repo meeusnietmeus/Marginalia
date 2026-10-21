@@ -55,7 +55,7 @@ ColumnLayout {
         }
 
         CapsLabel {
-            visible: list.count === 0 && section.emptyText !== "" && !section.loading
+            visible: list.count === 0 && section.emptyText !== ""
             width: list.width - 8
             topPadding: 6
             wrapMode: Text.Wrap
