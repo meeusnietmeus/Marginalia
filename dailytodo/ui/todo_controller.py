@@ -1461,6 +1461,11 @@ class TodoController(QObject):
             except ClientStateError:
                 pass
 
+    @Slot(result=str)
+    def downloadsFolder(self) -> str:
+        """The user's Downloads folder (where "pick file" starts)."""
+        return str(_downloads_folder())
+
     @Slot(str, result=QUrl)
     def fileUrl(self, path: str) -> QUrl:
         return QUrl.fromLocalFile(path)
