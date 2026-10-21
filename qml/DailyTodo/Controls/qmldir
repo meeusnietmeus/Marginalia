@@ -29,3 +29,6 @@ ClickHandler 1.0 ClickHandler.qml
 InputBlocker 1.0 InputBlocker.qml
 NumberField 1.0 NumberField.qml
 AppMenuToggle 1.0 AppMenuToggle.qml
+AppComboBox 1.0 AppComboBox.qml
+SettingsSection 1.0 SettingsSection.qml
+SettingsRow 1.0 SettingsRow.qml
