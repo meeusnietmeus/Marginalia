@@ -611,104 +611,13 @@ Item {
             onPageRequested: (page) => view.goToPage(page)
         }
 
-        // Bottom part: "PAGE 5 OF 21" (the number is an input; scroll it to change page), then the
-        // view controls: zoom level and wide mode together in an inset track, dark mode in one of
-        // its own, and export as a plain icon. A Flow, so they wrap when the column is narrow.
+        // Bottom part: the flowcharts of this document (and a new one) and export, as plain icons.
+        // (The page number and the view controls float over the PDF, see `viewBar`.) A Flow, so
+        // they wrap when the column is narrow.
         Flow {
             Layout.fillWidth: true
             Layout.leftMargin: 14
             spacing: 18
-
-            Row {
-                height: 34
-                spacing: 8
-                CapsLabel {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: "Page"
-                }
-                AppTextField {
-                    id: pageField
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: 46
-                    implicitHeight: 28
-                    font.pixelSize: 12
-                    font.bold: true
-                    horizontalAlignment: TextInput.AlignHCenter
-                    leftPadding: 4
-                    rightPadding: 4
-                    validator: IntValidator { bottom: 1; top: view.maxPage }
-                    inputMethodHints: Qt.ImhDigitsOnly
-                    text: view.currentPage
-                    onAccepted: {
-                        view.goToPage(parseInt(text))
-                        focus = false
-                    }
-                    onActiveFocusChanged: {
-                        if (!activeFocus) text = view.currentPage
-                        else selectAll()
-                    }
-                    Connections {
-                        target: view
-                        function onCurrentPageChanged() {
-                            if (!pageField.activeFocus) pageField.text = view.currentPage
-                        }
-                    }
-                    // Wheel down = next page, wheel up = previous page.
-                    WheelHandler {
-                        onWheel: (event) => view.goToPage(view.currentPage + (event.angleDelta.y < 0 ? 1 : -1))
-                    }
-                }
-                CapsLabel {
-                    visible: view.hasDocument
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: "of " + view.pageCount
-                }
-            }
-
-            // zoom level (click it: back to 100%) and wide mode
-            Item {
-                visible: view.hasDocument
-                width: zoomTools.width + 8
-                height: 34
-                Well { anchors.fill: parent; radius: height / 2 }
-                Row {
-                    id: zoomTools
-                    anchors.centerIn: parent
-                    spacing: 2
-                    AppButton {
-                        compact: true
-                        implicitHeight: 26
-                        text: Math.round(view.zoom * 100) + "%"
-                        font.pixelSize: 12
-                        textColor: Theme.textMuted
-                        onClicked: view.zoomBy(1 / view.zoom, pages.width / 2, pages.height / 2)
-                    }
-                    IconButton {
-                        compact: true
-                        implicitHeight: 26
-                        iconSource: view.wide ? Theme.iconShrink : Theme.iconExpand
-                        active: view.wide
-                        onClicked: view.wide = !view.wide
-                    }
-                }
-            }
-
-            // dark mode
-            Item {
-                visible: view.hasDocument
-                width: 34
-                height: 34
-                Well { anchors.fill: parent; radius: height / 2 }
-                IconButton {
-                    anchors.centerIn: parent
-                    compact: true
-                    implicitHeight: 26
-                    implicitWidth: 26
-                    iconSource: Theme.iconMoon
-                    active: view.dark
-                    onClicked: view.dark = !view.dark
-                }
-            }
 
             // The flowcharts attached to this document, and a new one: a plain icon, with a count.
             IconButton {
@@ -864,6 +773,152 @@ Item {
         footer: Item {
             width: pages.contentWidth
             height: 150
+
+    // ------------------------------------------------------- page and view controls
+    // Floats over the top of the PDF: out of sight until the pointer comes near the top edge (a
+    // document without pages to show, the notes tab of a web link, keeps it in view: that is where
+    // the page is typed).
+    Item {
+        id: viewBar
+        z: 8
+        width: view.centerWidth
+        height: 76
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.top: parent.top
+
+        readonly property bool shown: !view.hasDocument || zoneHover.hovered || barHover.hovered
+                                      || pageField.activeFocus
+        HoverHandler { id: zoneHover }
+
+        Item {
+            id: barPanel
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: viewBar.shown ? 12 : -4
+            width: barRow.implicitWidth + 24
+            height: barRow.implicitHeight + 16
+            opacity: viewBar.shown ? 1 : 0
+            visible: opacity > 0
+            Behavior on opacity { NumberAnimation { duration: Theme.listEnterDuration; easing.type: Easing.OutCubic } }
+            Behavior on y { NumberAnimation { duration: Theme.listEnterDuration; easing.type: Easing.OutCubic } }
+
+            GlassPanel {
+                anchors.fill: parent
+                radius: height / 2
+                backdrop: view.hasDocument ? pages : null
+            }
+            HoverHandler { id: barHover }
+
+            Row {
+                id: barRow
+                anchors.centerIn: parent
+                spacing: 14
+                Row {
+                    height: 34
+                    spacing: 8
+                    CapsLabel {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "Page"
+                    }
+                    AppTextField {
+                        id: pageField
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 46
+                        implicitHeight: 28
+                        font.pixelSize: 12
+                        font.bold: true
+                        horizontalAlignment: TextInput.AlignHCenter
+                        leftPadding: 4
+                        rightPadding: 4
+                        validator: IntValidator { bottom: 1; top: view.maxPage }
+                        inputMethodHints: Qt.ImhDigitsOnly
+                        text: view.currentPage
+                        onAccepted: {
+                            view.goToPage(parseInt(text))
+                            focus = false
+                        }
+                        onActiveFocusChanged: {
+                            if (!activeFocus) text = view.currentPage
+                            else selectAll()
+                        }
+                        Connections {
+                            target: view
+                            function onCurrentPageChanged() {
+                                if (!pageField.activeFocus) pageField.text = view.currentPage
+                            }
+                        }
+                        // Wheel down = next page, wheel up = previous page.
+                        WheelHandler {
+                            onWheel: (event) => view.goToPage(view.currentPage + (event.angleDelta.y < 0 ? 1 : -1))
+                        }
+                    }
+                    CapsLabel {
+                        visible: view.hasDocument
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "of " + view.pageCount
+                    }
+                }
+
+                Rectangle {                                // a thin divider between the groups
+                    visible: view.hasDocument
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 1
+                    height: 20
+                    color: Theme.hairlineStrong
+                }
+                // zoom level (click it: back to 100%) and wide mode
+                Item {
+                    visible: view.hasDocument
+                    width: zoomTools.width + 8
+                    height: 34
+                    Well { anchors.fill: parent; radius: height / 2 }
+                    Row {
+                        id: zoomTools
+                        anchors.centerIn: parent
+                        spacing: 2
+                        AppButton {
+                            compact: true
+                            implicitHeight: 26
+                            text: Math.round(view.zoom * 100) + "%"
+                            font.pixelSize: 12
+                            textColor: Theme.textMuted
+                            onClicked: view.zoomBy(1 / view.zoom, pages.width / 2, pages.height / 2)
+                        }
+                        IconButton {
+                            compact: true
+                            implicitHeight: 26
+                            iconSource: view.wide ? Theme.iconShrink : Theme.iconExpand
+                            active: view.wide
+                            onClicked: view.wide = !view.wide
+                        }
+                    }
+                }
+
+                Rectangle {                                // a thin divider between the groups
+                    visible: view.hasDocument
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 1
+                    height: 20
+                    color: Theme.hairlineStrong
+                }
+                // dark mode
+                Item {
+                    visible: view.hasDocument
+                    width: 34
+                    height: 34
+                    Well { anchors.fill: parent; radius: height / 2 }
+                    IconButton {
+                        anchors.centerIn: parent
+                        compact: true
+                        implicitHeight: 26
+                        implicitWidth: 26
+                        iconSource: Theme.iconMoon
+                        active: view.dark
+                        onClicked: view.dark = !view.dark
+                    }
+                }
+            }
+        }
+    }
 
             Column {
                 x: Math.min(pages.contentWidth, pages.width) / 2 - width / 2
