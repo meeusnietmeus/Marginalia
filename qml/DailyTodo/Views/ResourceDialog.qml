@@ -17,6 +17,7 @@ AppDialog {
 
     property int resourceId: -1               // -1: creating a new one
     property string mode: "link"              // "link" | "file"
+    property bool offerImport: false          // a way to import several files at once instead
     property string path: ""
     readonly property bool editing: resourceId >= 0
     property var selectedTags: []             // tag ids
@@ -41,6 +42,7 @@ AppDialog {
     readonly property bool offerMove: !editing && mode === "file" && path !== ""
                                       && workspaceFolder !== "" && !controller.isInWorkspaceFolder(path)
 
+    signal importRequested()
     signal createRequested(string uri, string name, var tagIds, bool moveFile)
     signal updateRequested(int id, string uri, string name, var tagIds)
 
@@ -282,6 +284,17 @@ AppDialog {
                     fileDialog.open()
                 }
             }
+        }
+
+        // Many files at once: a window of its own (drop them, check the list, one set of tags).
+        Text {
+            visible: dialog.offerImport && !dialog.editing && dialog.mode === "file"
+            text: "Import several files at once..."
+            font.pixelSize: 12
+            color: Theme.accent
+            font.underline: importHover.hovered
+            HoverHandler { id: importHover; cursorShape: Qt.PointingHandCursor }
+            ClickHandler { onTapped: dialog.importRequested() }
         }
 
         // A file from somewhere else: offer to bring it into the workspace's folder.

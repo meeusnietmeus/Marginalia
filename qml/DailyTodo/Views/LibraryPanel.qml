@@ -24,6 +24,24 @@ SideColumn {
     // Resources or tags.
     property bool showTags: false
 
+    // Files or folders dropped on the library are imported (the Import files window opens with them).
+    DropArea {
+        id: dropIn
+        anchors.fill: parent
+        keys: ["text/uri-list"]
+        enabled: !library.showTags
+        onDropped: (event) => { if (event.hasUrls) library.actions.importFiles(event.urls.map(u => u.toString())) }
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: 4
+            radius: 16
+            visible: dropIn.containsDrag
+            color: Qt.alpha(Theme.accent, 0.08)
+            border.width: 1.5
+            border.color: Theme.accent
+        }
+    }
+
     headerActions: [
         SegmentedSwitch {
             anchors.verticalCenter: parent.verticalCenter

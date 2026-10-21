@@ -24,6 +24,7 @@ WorkspaceSettingsDialog 1.0 WorkspaceSettingsDialog.qml
 LibraryPanel 1.0 LibraryPanel.qml
 ResourceCard 1.0 ResourceCard.qml
 ResourceDialog 1.0 ResourceDialog.qml
+BulkImportDialog 1.0 BulkImportDialog.qml
 TagPill 1.0 TagPill.qml
 TagDialog 1.0 TagDialog.qml
 SectionList 1.0 SectionList.qml

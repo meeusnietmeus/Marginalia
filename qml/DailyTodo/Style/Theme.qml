@@ -167,6 +167,7 @@ QtObject {
     readonly property url iconInfo: Qt.resolvedUrl("icons/info.svg")
     readonly property url iconWarning: Qt.resolvedUrl("icons/triangle-alert.svg")
     readonly property url iconFolder: Qt.resolvedUrl("icons/folder.svg")
+    readonly property url iconDownload: Qt.resolvedUrl("icons/download.svg")
     readonly property url iconExternal: Qt.resolvedUrl("icons/external-link.svg")
     readonly property url iconInApp: Qt.resolvedUrl("icons/app-window.svg")
     readonly property url iconMoon: Qt.resolvedUrl("icons/moon.svg")
