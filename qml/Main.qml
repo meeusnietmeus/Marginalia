@@ -419,6 +419,7 @@ ApplicationWindow {
             return w ? w.name : ""
         }
         canDelete: root.controller.workspaces.length > 1
+        controller: root.controller
         resourceFolder: root.settingsFolder
         timelineSort: root.controller.timelineSort
         backlogSort: root.controller.backlogSort
@@ -437,6 +438,10 @@ ApplicationWindow {
         showExport: root.controller.canBackup
         pdfScrollSpeed: root.controller.pdfScrollSpeed
         onPdfScrollSpeedPicked: (speed) => root.controller.setPdfScrollSpeed(speed)
+        backupOnClose: root.controller.backupOnClose
+        backupKeep: root.controller.backupKeep
+        onBackupOnCloseToggled: (on) => root.controller.setBackupOnClose(on)
+        onBackupKeepPicked: (keep) => root.controller.setBackupKeep(keep)
         onExportClicked: root.controller.exportBackup()
     }
     // ---- "Deleted ... Undo" toasts (bottom right, newest at the bottom) ----
@@ -514,6 +519,7 @@ ApplicationWindow {
         function onCaptureNeedsResource(link, title, kind, seconds) { captureDialog.ask(link, title, kind, seconds) }
         // its notes went with it: the tab could only show errors now
         function onResourceRemoved(resourceId) { root.closeTabsOf(resourceId) }
+        function onWorkspaceFolderChanged() { root.settingsFolder = root.controller.defaultResourceFolder() }
         // its PDF is being replaced: a tab would keep the old file locked
         function onResourceTabsShouldClose(resourceId) { root.closeTabsOf(resourceId) }
         function onUndoOffered(token, message) {

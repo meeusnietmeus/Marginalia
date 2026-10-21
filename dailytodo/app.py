@@ -103,6 +103,7 @@ def run(argv: list[str] | None = None) -> int:
         return 1
     # client_state is not closed on quit: PDF tabs save their page while the app shuts down, and
     # every write is committed on its own anyway.
+    app.aboutToQuit.connect(controller.backupOnQuit)  # (before the storage closes)
     app.aboutToQuit.connect(repo.close)
 
     engine = QQmlApplicationEngine()

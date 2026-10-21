@@ -33,6 +33,9 @@ from ..core import (
     STATUS_LABELS,
     UNIFIED_FILTERS,
     sort_todos,
+    BACKUPS,
+    folder_problem,
+    plan_folder_move,
     DayPlanner,
     ResourceCard,
     ResourceId,
@@ -89,6 +92,8 @@ from ..storage import (
     RepositoryError,
     TodoRepository,
     export_backup,
+    list_backups,
+    prune_backups,
     write_text_unique,
 )
 from .backlog_list_model import BacklogListModel, BacklogTodo
@@ -129,6 +134,8 @@ class TodoController(QObject):
 
     notify = Signal(str)  # short messages for the UI to show as a toast
     workspaceChanged = Signal()
+    backupSettingsChanged = Signal()
+    workspaceFolderChanged = Signal()  # the active workspace's folder was moved
     todoOrderChanged = Signal()  # the sort order of the timeline or the backlog (or "done last")
     workspacesChanged = Signal()
     # Answer to fetchTitle: (url, page title or "", error message or "")
@@ -335,7 +342,7 @@ class TodoController(QObject):
     @Slot(str, str)
     def createWorkspace(self, name: str, folder: str = "") -> None:
         """Add a workspace and switch to it. A workspace needs a folder (made if it isn't there):
-        the files of its resources live there, and it can't be changed afterwards."""
+        the files of its resources live there (see ``retargetWorkspaceFolder`` for changing it)."""
         name = name.strip()
         folder = folder.strip()
         if not name:
@@ -1320,6 +1327,120 @@ class TodoController(QObject):
         except ClientStateError:
             return ""
 
+    # ---- moving the workspace folder ----
+    def _folder_plan(self, new_folder: str):
+        old = self.defaultResourceFolder()
+        resources = [(c.id, c.uri, c.is_path, c.kind) for c in self._cards.values()]
+        backups = [str(p) for p in list_backups(Path(old) / BACKUPS, self._backup_suffix())] if old else []
+        return old, plan_folder_move(old, new_folder, resources, backups)
+
+    @Slot(str, result="QVariantMap")
+    def previewFolderRetarget(self, new_folder: str) -> dict:
+        """What moving the workspace folder to ``new_folder`` would do, for the confirmation:
+        {"ok", "error", "count" (files that move), "missing" (links whose file isn't there)}."""
+        new_folder = new_folder.strip()
+        old = self.defaultResourceFolder()
+        problem = folder_problem(old, new_folder)
+        if problem:
+            return {"ok": False, "error": problem, "count": 0, "missing": 0, "backups": 0}
+        if self._exporting:
+            return {"ok": False, "error": "A presentation is still being prepared: try again in a moment",
+                    "count": 0, "missing": 0, "backups": 0}
+        _, plan = self._folder_plan(new_folder)
+        clashes = [Path(i.target).name for i in plan.items
+                   if Path(i.source).is_file() and Path(i.target).exists()]
+        if clashes:
+            more = f" (and {len(clashes) - 1} more)" if len(clashes) > 1 else ""
+            return {"ok": False, "error": f"\"{clashes[0]}\"{more} already exists in the new folder",
+                    "count": 0, "missing": 0, "backups": 0}
+        present = [i for i in plan.items if i.resource_id >= 0 and Path(i.source).is_file()]
+        return {"ok": True, "error": "", "count": len(present),
+                "missing": sum(1 for i in plan.items if i.resource_id >= 0) - len(present),
+                "backups": sum(1 for i in plan.items if i.resource_id < 0)}
+
+    @Slot(str)
+    def retargetWorkspaceFolder(self, new_folder: str) -> None:
+        """Make ``new_folder`` the workspace's folder: every file of a resource inside the old one
+        (and the PDFs made from presentations) is moved there, keeping its place in the folder,
+        and the links of those resources are updated. All or nothing: if a file can't be moved, or
+        the database refuses, what was done is undone and everything stays where it was."""
+        new_folder = new_folder.strip()
+        preview = self.previewFolderRetarget(new_folder)
+        if not preview["ok"]:
+            self.notify.emit(preview["error"])
+            return
+        old, plan = self._folder_plan(new_folder)
+        try:
+            Path(new_folder).mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            self.notify.emit(f"Couldn't use that folder: {exc}")
+            return
+        for item in plan.items:  # an open tab keeps its file locked
+            if item.resource_id >= 0:
+                self.resourceTabsShouldClose.emit(item.resource_id)
+        # Give the tabs a moment to let go of their files (the same wait as deleting a PDF).
+        QTimer.singleShot(400, lambda: self._move_folder(old, new_folder, plan, 10))
+
+    @staticmethod
+    def _remove_if_empty(folder: Path) -> None:
+        try:
+            folder.rmdir()  # the old backup folder, once its backups have moved out
+        except OSError:
+            pass  # not empty (something else is in it), or already gone
+
+    def _move_folder(self, old: str, new_folder: str, plan, tries: int) -> None:
+        done: list[tuple[str, str]] = []
+
+        def undo_moves() -> None:
+            for source, target in reversed(done):
+                try:
+                    Path(source).parent.mkdir(parents=True, exist_ok=True)
+                    shutil.move(target, source)
+                except OSError:
+                    pass
+            done.clear()
+
+        try:
+            for item in plan.items:
+                if not Path(item.source).is_file():
+                    continue  # a link whose file is gone: only the link moves
+                Path(item.target).parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(item.source, item.target)  # also across drives
+                done.append((item.source, item.target))
+        except OSError as exc:
+            undo_moves()
+            if tries > 0 and isinstance(exc, PermissionError):  # still locked by a closing tab
+                QTimer.singleShot(300, lambda: self._move_folder(old, new_folder, plan, tries - 1))
+                return
+            self.notify.emit(f"Couldn't move the files, nothing was changed: {exc.strerror or exc}")
+            return
+        links = plan.link_updates
+        try:
+            self._repo.retarget_resources(links)
+        except RepositoryError as exc:
+            undo_moves()
+            self.notify.emit(f"Couldn't update the links, nothing was changed: {exc}")
+            return
+        if self._client is not None:
+            try:
+                self._client.set_workspace_setting(
+                    self._workspace_id, self.RESOURCE_FOLDER_KEY, new_folder
+                )
+            except ClientStateError as exc:
+                undo = {i.resource_id: i.source for i in plan.items if i.link}
+                try:
+                    self._repo.retarget_resources(undo)
+                except RepositoryError:
+                    pass
+                undo_moves()
+                self.notify.emit(f"Couldn't save the new folder, nothing was changed: {exc}")
+                return
+        self._refresh_resources()
+        self.workspaceFolderChanged.emit()
+        moved = len(done)
+        self.notify.emit(f"Workspace folder moved ({moved} file{'s' if moved != 1 else ''})")
+        self._remove_if_empty(Path(old) / BACKUPS)
+
     @Slot(str)
     def setDefaultResourceFolder(self, path: str) -> None:
         """Empty clears it."""
@@ -1339,6 +1460,11 @@ class TodoController(QObject):
                 self._client.forget_pdf(resource_id)
             except ClientStateError:
                 pass
+
+    @Slot(result=str)
+    def downloadsFolder(self) -> str:
+        """The user's Downloads folder (where "pick file" starts)."""
+        return str(_downloads_folder())
 
     @Slot(str, result=QUrl)
     def fileUrl(self, path: str) -> QUrl:
@@ -1627,18 +1753,92 @@ class TodoController(QObject):
         QGuiApplication.clipboard().setText(text)
         self.notify.emit("Copied to clipboard")
 
+    # ---- backups: <workspace folder>/.backups/, the oldest go when there are more than `keep` ----
+    BACKUP_KEEP_KEY = "backup_keep"
+    BACKUP_ON_CLOSE_KEY = "backup_on_close"
+    BACKUP_KEEP_DEFAULT = 10
+    BACKUP_KEEP_MAX = 999
+
+    def _backup_suffix(self) -> str:
+        return getattr(self._repo, "backup_suffix", ".db")
+
+    def _backup_folder(self) -> Path:
+        """The backup folder of the active workspace: inside its folder, else in the data folder."""
+        folder = self.defaultResourceFolder()
+        base = Path(folder) if folder else (self._data_dir if self._data_dir is not None
+                                            else Path(tempfile.gettempdir()))
+        return base / BACKUPS
+
+    def _app_setting(self, key: str) -> str | None:
+        if self._client is None:
+            return None
+        try:
+            return self._client.app_setting(key)
+        except ClientStateError:
+            return None
+
+    def _save_app_setting(self, key: str, value: str) -> None:
+        if self._client is None:
+            return
+        try:
+            self._client.set_app_setting(key, value)
+        except ClientStateError as exc:
+            self.notify.emit(f"Couldn't save the setting: {exc}")
+
+    @Property(int, notify=backupSettingsChanged)
+    def backupKeep(self) -> int:
+        """How many backups to keep (0: all of them)."""
+        try:
+            return max(0, min(self.BACKUP_KEEP_MAX, int(self._app_setting(self.BACKUP_KEEP_KEY))))
+        except (TypeError, ValueError):
+            return self.BACKUP_KEEP_DEFAULT
+
+    @Slot(int)
+    def setBackupKeep(self, keep: int) -> None:
+        keep = max(0, min(self.BACKUP_KEEP_MAX, int(keep)))
+        if keep != self.backupKeep:
+            self._save_app_setting(self.BACKUP_KEEP_KEY, str(keep))
+            self.backupSettingsChanged.emit()
+
+    @Property(bool, notify=backupSettingsChanged)
+    def backupOnClose(self) -> bool:
+        return self._app_setting(self.BACKUP_ON_CLOSE_KEY) == "1"
+
+    @Slot(bool)
+    def setBackupOnClose(self, on: bool) -> None:
+        if on != self.backupOnClose:
+            self._save_app_setting(self.BACKUP_ON_CLOSE_KEY, "1" if on else "0")
+            self.backupSettingsChanged.emit()
+
+    def _make_backup(self) -> Path:
+        """Back up into the backup folder, then drop the oldest ones. Raises RepositoryError / OSError."""
+        folder = self._backup_folder()
+        dest = export_backup(self._repo, folder)
+        prune_backups(folder, self.backupKeep, self._backup_suffix())
+        return dest
+
     @Slot()
     def exportBackup(self) -> None:
-        """Write a full copy of the storage to the user's Downloads folder."""
+        """Back up now, into the workspace's backup folder."""
         if not isinstance(self._repo, BackupCapable):
             self.notify.emit("Backup isn't available for this storage")
             return
         try:
-            dest = export_backup(self._repo, _downloads_folder())
+            dest = self._make_backup()
         except (RepositoryError, OSError) as exc:
             self.notify.emit(f"Backup failed: {exc}")
             return
         self.notify.emit(f"Backup saved to {dest}")
+
+    @Slot()
+    def backupOnQuit(self) -> None:
+        """Called as the app closes: a backup when the setting asks for one (silently)."""
+        if not self.backupOnClose or not isinstance(self._repo, BackupCapable):
+            return
+        try:
+            self._make_backup()
+        except (RepositoryError, OSError):
+            pass  # closing must never be held up by it
 
     @Slot(int, str)
     def exportPdfMarkdown(self, resource_id: ResourceId, title: str) -> None:

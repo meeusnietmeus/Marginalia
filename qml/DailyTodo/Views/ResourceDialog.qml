@@ -74,7 +74,7 @@ AppDialog {
         resourceId = -1
         chooseWorkspace = false
         workspaceId = -1
-        mode = "link"
+        mode = "file"
         nameEdited = false
         lookupState = "idle"
         path = ""
@@ -90,6 +90,7 @@ AppDialog {
     // (else its title is looked up at once).
     function openWithLink(link, name) {
         openNew()
+        mode = "link"
         linkField.text = link
         if (name) {
             nameField.text = name
@@ -276,10 +277,8 @@ AppDialog {
                     }
                 }
                 onClicked: {
-                    // start in the workspace's default folder (a client-side setting), if it has one
-                    const folder = dialog.controller.defaultResourceFolder()
-                    if (folder !== "")
-                        fileDialog.currentFolder = dialog.controller.fileUrl(folder)
+                    // files usually come from the Downloads folder: start there
+                    fileDialog.currentFolder = dialog.controller.fileUrl(dialog.controller.downloadsFolder())
                     fileDialog.open()
                 }
             }
