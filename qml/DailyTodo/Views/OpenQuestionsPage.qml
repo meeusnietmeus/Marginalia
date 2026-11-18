@@ -454,6 +454,13 @@ Item {
                     id: questionMenu
                     onEditTriggered: card.startEdit()
                     onDeleteTriggered: view.oq.delete(card.noteId)
+                    topBefore: [
+                        MenuIconButton {
+                            text: "Copy question for an LLM"
+                            iconSource: Theme.iconCopy
+                            onTriggered: view.controller.copyQuestionForLlm(card.body, "")
+                        }
+                    ]
                     AppMenuItem {
                         text: card.page > 0 ? "Open at " + card.pageLabel.toLowerCase() : "Open"
                         iconSource: Theme.iconInApp

@@ -1814,6 +1814,26 @@ class TodoController(QObject):
         QGuiApplication.clipboard().setText(text)
         self.notify.emit("Copied to clipboard")
 
+    LLM_QUESTION_INSTRUCTIONS = (
+        "Answer the question below. If a <reference> is given, it is a passage from the source "
+        "the question is about: use it as extra context on the topic, but do not just repeat it. "
+        "Make the answer concise but dense with domain knowledge: define key terms, give the "
+        "underlying mechanism or reasoning, and mention caveats or common misconceptions only "
+        "when they matter. No filler or preamble."
+    )
+
+    @Slot(str, str)
+    def copyQuestionForLlm(self, question: str, reference: str = "") -> None:
+        """Put a question on the clipboard as a prompt for an LLM: the instructions, the passage it
+        is about (when there is one) as <reference>, and the question as <question>."""
+        parts = ["<instructions>", self.LLM_QUESTION_INSTRUCTIONS, "</instructions>"]
+        reference = " ".join(reference.split())
+        if reference:
+            parts += ["", "<reference>", reference, "</reference>"]
+        parts += ["", "<question>", self.toEditText(question).strip(), "</question>"]
+        QGuiApplication.clipboard().setText("\n".join(parts))
+        self.notify.emit("Question copied for an LLM")
+
     # ---- backups: <workspace folder>/.backups/, the oldest go when there are more than `keep` ----
     BACKUP_KEEP_KEY = "backup_keep"
     BACKUP_ON_CLOSE_KEY = "backup_on_close"

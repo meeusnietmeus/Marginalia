@@ -55,6 +55,9 @@ Item {
     // Every highlight of this PDF ({ id, page, text, rects }): the pages draw their own.
     readonly property var highlightList: session ? session.highlights : []
     property int glowHighlight: -1           // the highlight to pulse (its note is being hovered)
+    // Green highlights are abbreviations: the list behind the button at the bottom left.
+    readonly property var abbreviations: highlightList.filter(h => h.color === "green" && h.text.trim() !== "")
+                                                       .sort((a, b) => a.page - b.page)
     property string lastHighlightColor: "yellow"   // new highlights get the colour picked last
     // The text selected on a page once the mouse is released: { page (1-based), text, rects }.
     // Highlighting, noting or copying act on it. null when nothing is selected.
@@ -597,6 +600,14 @@ Item {
 
         width: 300
         onOpened: {
+        topBefore: [
+            MenuIconButton {
+                visible: localMenu.entry !== null && localMenu.entry.isQuestion
+                text: "Copy question for an LLM"
+                iconSource: Theme.iconCopy
+                onTriggered: view.controller.copyQuestionForLlm(localMenu.entry.body, localMenu.entry.quote)
+            }
+        ]
             pageInput.forceActiveFocus()
             pageInput.selectAll()
         }
@@ -680,6 +691,14 @@ Item {
                 visible: view.hasDocument               // a PDF or a presentation
                 property var charts: []
                 function refresh() { charts = view.resourceId >= 0 ? view.controller.flowchartsOf(view.resourceId) : [] }
+        topBefore: [
+            MenuIconButton {
+                visible: globalMenu.entry !== null && globalMenu.entry.isQuestion
+                text: "Copy question for an LLM"
+                iconSource: Theme.iconCopy
+                onTriggered: view.controller.copyQuestionForLlm(globalMenu.entry.body, "")
+            }
+        ]
                 Component.onCompleted: refresh()
                 Connections {
                     target: view
@@ -875,6 +894,103 @@ Item {
                         id: zoomTools
                         anchors.centerIn: parent
                         spacing: 2
+            // The abbreviations of this document (its green highlights): a list floating above
+            // the button; a click on one goes to its page.
+            IconButton {
+                id: abbreviationsButton
+                visible: view.hasDocument
+                height: 34
+                compact: true
+                iconSource: Theme.iconAbbreviations
+                textColor: abbreviationsButton.hovered || abbreviationsPopup.visible ? Theme.text : Theme.textMuted
+                onClicked: abbreviationsPopup.visible ? abbreviationsPopup.close() : abbreviationsPopup.open()
+
+                PillLabel {                          // how many there are
+                    visible: view.abbreviations.length > 0
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    anchors.rightMargin: -6
+                    anchors.topMargin: -2
+                    height: 16
+                    width: Math.max(16, implicitWidth - 6)
+                    text: view.abbreviations.length
+                    tint: Theme.highlightColor("green")
+                    textColor: Theme.text
+                }
+                AppToolTip {
+                    text: "Abbreviations"
+                    shown: abbreviationsButton.hovered && !abbreviationsPopup.visible
+                }
+                Popup {
+                    id: abbreviationsPopup
+                    x: 0
+                    y: -height - 8
+                    width: Math.min(Math.max(view.sideWidth, 280), 360)
+                    height: Math.min(abbreviationsColumn.contentHeight + topPadding + bottomPadding, 340)
+                    padding: 6
+                    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+                    background: Surface { elevation: 2; radius: 14 }
+                    enter: Transition {
+                        NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 110 }
+                        NumberAnimation { property: "scale"; from: 0.96; to: 1; duration: 140; easing.type: Easing.OutCubic }
+                    }
+                    exit: Transition { NumberAnimation { property: "opacity"; to: 0; duration: 80 } }
+
+                    ListView {
+                        id: abbreviationsColumn
+                        anchors.fill: parent
+                        clip: true
+                        spacing: 2
+                        model: view.abbreviations
+                        boundsBehavior: Flickable.StopAtBounds
+                        ScrollBar.vertical: ScrollBar {}
+
+                        delegate: Item {
+                            id: abbr
+                            required property var modelData
+                            width: ListView.view.width - 8
+                            height: Math.max(36, abbrText.implicitHeight + 16)
+
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: 9
+                                color: abbrHover.hovered ? Qt.alpha(Theme.text, 0.07) : "transparent"
+                            }
+                            Rectangle {
+                                x: 8
+                                y: 8
+                                width: 3
+                                height: parent.height - 16
+                                radius: 1.5
+                                color: Theme.highlightColor("green")
+                            }
+                            Text {
+                                id: abbrText
+                                x: 20
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: parent.width - x - abbrPage.width - 20
+                                text: abbr.modelData.text.replace(/\s+/g, " ").trim()
+                                wrapMode: Text.Wrap
+                                maximumLineCount: 3
+                                elide: Text.ElideRight
+                                font.pixelSize: 13
+                                color: Theme.text
+                            }
+                            CapsLabel {
+                                id: abbrPage
+                                anchors.right: parent.right
+                                anchors.rightMargin: 10
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "p. " + abbr.modelData.page
+                                color: Theme.textFaint
+                            }
+                            HoverHandler { id: abbrHover; cursorShape: Qt.PointingHandCursor }
+                            ClickHandler { onTapped: view.goToPage(abbr.modelData.page) }
+                        }
+                    }
+                }
+            }
+
                         AppButton {
                             compact: true
                             implicitHeight: 26

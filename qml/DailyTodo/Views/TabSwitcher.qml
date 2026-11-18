@@ -104,13 +104,6 @@ Item {
             width: parent.width - 24
             spacing: 2
 
-            CapsLabel {
-                leftPadding: 10
-                bottomPadding: 6
-                topPadding: 2
-                text: "Recently used  ·  Tab: next  ·  Shift+Tab: back"
-                color: Theme.textFaint
-            }
             Repeater {
                 model: switcher.entries
                 Item {
