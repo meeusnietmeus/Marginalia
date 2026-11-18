@@ -171,7 +171,8 @@ QtObject {
     readonly property url iconExternal: Qt.resolvedUrl("icons/external-link.svg")
     readonly property url iconInApp: Qt.resolvedUrl("icons/app-window.svg")
     readonly property url iconMoon: Qt.resolvedUrl("icons/moon.svg")
-    readonly property url iconExpand: Qt.resolvedUrl("icons/maximize-2.svg")
+    readonly property url iconReading: Qt.resolvedUrl("icons/book-open.svg")
+    readonly property url iconExpand:Qt.resolvedUrl("icons/maximize-2.svg")
     readonly property url iconShrink: Qt.resolvedUrl("icons/minimize-2.svg")
     readonly property url iconSort: Qt.resolvedUrl("icons/arrow-up-down.svg")
     readonly property url iconUndo: Qt.resolvedUrl("icons/undo-2.svg")
@@ -187,6 +188,7 @@ QtObject {
     readonly property url iconProgress: Qt.resolvedUrl("icons/progress.svg")
     readonly property url iconFlowchart: Qt.resolvedUrl("icons/workflow.svg")
     readonly property url iconSparkles: Qt.resolvedUrl("icons/sparkles.svg")
+    readonly property url iconAbbreviations: Qt.resolvedUrl("icons/letter-text.svg")
     readonly property url iconPaste: Qt.resolvedUrl("icons/clipboard-paste.svg")
     readonly property url iconAbbreviations: Qt.resolvedUrl("icons/letter-text.svg")
 

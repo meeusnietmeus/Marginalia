@@ -106,8 +106,100 @@ Item {
                                        && boxHighlightId < 0
     property bool wide: false                // give the PDF column more room (3/5 of the page)
 
+    // ---- reading mode ----
+    // The window goes full screen and only the document stays: either its pages, or just its text
+    // reflowed into a calm column. Everything below the pointer is hazed, so the eye knows where
+    // the line being read is.
+    property bool reading: false
+    property bool readingText: false         // the text alone (reflowed) instead of the pages
+    property bool readingHaze: true          // haze what is below the pointer
+    property int readingSize: 21             // font size of the reflowed text
+    property string readingTone: "dark"      // dark | sepia | light: the desk and the text
+    readonly property bool textLayout: reading && readingText
+    readonly property var tones: ({
+        dark:  { desk: "#1a1410", text: "#e6dccd", faint: "#8f8272" },
+        sepia: { desk: "#eadfc4", text: "#3b2f22", faint: "#8a7a62" },
+        light: { desk: "#f3f0ea", text: "#201c18", faint: "#8a847a" }
+    })
+    readonly property var tone: tones[readingTone]
+    property int visibilityBeforeReading: Window.AutoVisibility
+
+    function setReading(on) {
+        if (on === reading || (on && !hasDocument)) return
+        const w = Window.window
+        const page = currentPage
+        if (on) {
+            if (w) {
+                visibilityBeforeReading = w.visibility
+                w.visibility = Window.FullScreen
+                if (w.header) w.header.visible = false
+            }
+        } else if (w) {
+            if (w.header) w.header.visible = true
+            w.visibility = visibilityBeforeReading === Window.FullScreen ? Window.Maximized
+                                                                         : visibilityBeforeReading
+        }
+        reading = on
+        Qt.callLater(() => goToPage(page))       // the pages changed size: stay where we were
+        Qt.callLater(() => view.forceActiveFocus())
+    }
+    function setReadingText(on) {
+        const page = currentPage
+        readingText = on
+        Qt.callLater(() => goToPage(page))
+    }
+    function cycleTone() {
+        readingTone = readingTone === "dark" ? "sepia" : readingTone === "sepia" ? "light" : "dark"
+    }
+    function setReadingSize(size) { readingSize = Math.max(14, Math.min(40, size)) }
+
+    // The list that scrolls right now, how far along it is (0 - 1), and a scroll by `dy` pixels.
+    readonly property var scroller: textLayout ? reader : pages
+    readonly property real readingProgress: {
+        const span = scroller.contentHeight - scroller.height
+        return span > 0 ? Math.max(0, Math.min(1, (scroller.contentY - scroller.originY) / span)) : 0
+    }
+    function scrollReadingBy(dy) {
+        const l = scroller
+        const maxY = Math.max(l.originY, l.originY + l.contentHeight - l.height)
+        keyScroll.stop()
+        keyScroll.target = l
+        keyScroll.to = Math.max(l.originY, Math.min(maxY, (keyScroll.running ? keyScroll.to : l.contentY) + dy))
+        keyScroll.start()
+    }
+    NumberAnimation { id: keyScroll; property: "contentY"; duration: 220; easing.type: Easing.OutCubic }
+
+    // The text of a page as paragraphs. A PDF only knows lines: join them again, undo a word split
+    // by a hyphen at the end of a line, and start a new paragraph after a short line that ends a
+    // sentence (the last line of a paragraph is shorter than the rest).
+    function paragraphsOf(raw) {
+        const lines = raw.replace(/\r/g, "").split("\n").map(l => l.trim())
+        const lengths = lines.filter(l => l.length > 0).map(l => l.length).sort((a, b) => a - b)
+        const full = lengths.length > 0 ? lengths[Math.floor(lengths.length * 0.8)] : 0
+        const out = []
+        let cur = ""
+        for (let i = 0; i < lines.length; i++) {
+            const l = lines[i]
+            if (l === "") {
+                if (cur !== "") { out.push(cur); cur = "" }
+                continue
+            }
+            if (cur === "") cur = l
+            else if (/[A-Za-zÀ-ɏ]-$/.test(cur) && /^[a-zß-ɏ]/.test(l)) cur = cur.slice(0, -1) + l
+            else cur += " " + l
+            const next = lines[i + 1]
+            if (next !== undefined && next !== "" && l.length < full * 0.75 && /[.!?:"”)]$/.test(l)) {
+                out.push(cur)
+                cur = ""
+            }
+        }
+        if (cur !== "") out.push(cur)
+        return out
+    }
+
     readonly property real columnGap: 20
-    readonly property real centerWidth: Math.max(320, width * (wide ? 0.6 : 0.46))
+    readonly property real centerWidth: reading ? Math.min(Math.max(320, width - 40), textLayout ? 820 : 980)
+                                                : Math.max(320, width * (wide ? 0.6 : 0.46))
     readonly property real sideWidth: Math.max(140, (width - centerWidth) / 2 - columnGap)
     readonly property real pageGap: 48       // empty space between two pages
     readonly property real pageMargin: 22    // room for the sheet's shadow
@@ -137,7 +229,9 @@ Item {
         resumeIfReady()
     }
     onCurrentPageChanged: if (session) session.setPage(currentPage)
+    onVisibleChanged: if (!visible && reading) setReading(false)     // another tab: leave full screen
     Component.onDestruction: {
+        if (reading && Window.window) setReading(false)
         saveProgress()
         if (session) session.dispose()
     }
@@ -178,8 +272,9 @@ Item {
         if (doc.pageCount === 0) return
         // The page at 30% of the viewport height: stable after jumping to a page (it sits at the
         // top), and it changes about when the next page has come well into view.
-        let i = pages.indexAt(pages.contentX + pages.width / 2, pages.contentY + pages.height * 0.3)
-        if (pages.atYEnd) i = doc.pageCount - 1     // the last page may never reach the middle
+        const list = scroller
+        let i = list.indexAt(list.contentX + list.width / 2, list.contentY + list.height * 0.3)
+        if (list.atYEnd) i = doc.pageCount - 1     // the last page may never reach the middle
         if (i >= 0) currentPage = i + 1
     }
 
@@ -189,7 +284,7 @@ Item {
             return
         }
         const p = Math.max(1, Math.min(doc.pageCount, page))
-        pages.positionViewAtIndex(p - 1, ListView.Beginning)
+        scroller.positionViewAtIndex(p - 1, ListView.Beginning)
         updateCurrentPage()
     }
 
@@ -296,6 +391,50 @@ Item {
         sequence: "H"
         enabled: view.visible && !view.noteBoxOpen && view.activeSelection !== null
         onActivated: view.highlightSelection()
+    }
+
+    // Reading mode: R toggles it. Inside it: Esc leaves, T pages / text, F the haze, Space and
+    // PageUp / PageDown scroll, the arrows turn the page.
+    readonly property bool readingKeys: visible && reading && !noteBoxOpen && !searchOpen && !textBoxFocused
+    Shortcut {
+        sequence: "R"
+        enabled: view.visible && view.hasDocument && !view.noteBoxOpen && !view.textBoxFocused
+        onActivated: view.setReading(!view.reading)
+    }
+    Shortcut {
+        sequence: "Escape"
+        enabled: view.readingKeys
+        onActivated: view.setReading(false)
+    }
+    Shortcut {
+        sequence: "T"
+        enabled: view.readingKeys
+        onActivated: view.setReadingText(!view.readingText)
+    }
+    Shortcut {
+        sequence: "F"
+        enabled: view.readingKeys
+        onActivated: view.readingHaze = !view.readingHaze
+    }
+    Shortcut {
+        sequences: ["Space", "PgDown"]
+        enabled: view.readingKeys
+        onActivated: view.scrollReadingBy(view.scroller.height * 0.85)
+    }
+    Shortcut {
+        sequences: ["Shift+Space", "PgUp"]
+        enabled: view.readingKeys
+        onActivated: view.scrollReadingBy(-view.scroller.height * 0.85)
+    }
+    Shortcut {
+        sequence: "Right"
+        enabled: view.readingKeys
+        onActivated: view.goToPage(view.currentPage + 1)
+    }
+    Shortcut {
+        sequence: "Left"
+        enabled: view.readingKeys
+        onActivated: view.goToPage(view.currentPage - 1)
     }
 
     // ------------------------------------------------------------------ search (Ctrl+F)
@@ -461,6 +600,14 @@ Item {
                                                 && view.activeSelection.page === view.currentPage
         onEditTriggered: entry.edit()
         onDeleteTriggered: view.session.deleteNote(entry.noteId)
+        topBefore: [
+            MenuIconButton {
+                visible: localMenu.entry !== null && localMenu.entry.isQuestion
+                text: "Copy question for an LLM"
+                iconSource: Theme.iconCopy
+                onTriggered: view.controller.copyQuestionForLlm(localMenu.entry.body, localMenu.entry.quote)
+            }
+        ]
         AppMenuItem {
             text: "Move to global"
             onTriggered: view.session.moveToGlobal(localMenu.entry.noteId)
@@ -544,6 +691,14 @@ Item {
         property Item entry
         onEditTriggered: entry.edit()
         onDeleteTriggered: view.session.deleteNote(entry.noteId)
+        topBefore: [
+            MenuIconButton {
+                visible: globalMenu.entry !== null && globalMenu.entry.isQuestion
+                text: "Copy question for an LLM"
+                iconSource: Theme.iconCopy
+                onTriggered: view.controller.copyQuestionForLlm(globalMenu.entry.body, "")
+            }
+        ]
         AppMenuItem {
             text: "To local (this page)"
             onTriggered: view.session.moveToPage(globalMenu.entry.noteId, view.currentPage)
@@ -649,6 +804,7 @@ Item {
 
     // ------------------------------------------------------------------ left column
     ColumnLayout {
+        visible: !view.reading
         anchors.left: parent.left
         anchors.top: parent.top
         anchors.bottom: parent.bottom
@@ -754,6 +910,103 @@ Item {
                 }
             }
 
+            // The abbreviations of this document (its green highlights): a list floating above
+            // the button; a click on one goes to its page.
+            IconButton {
+                id: abbreviationsButton
+                visible: view.hasDocument
+                height: 34
+                compact: true
+                iconSource: Theme.iconAbbreviations
+                textColor: abbreviationsButton.hovered || abbreviationsPopup.visible ? Theme.text : Theme.textMuted
+                onClicked: abbreviationsPopup.visible ? abbreviationsPopup.close() : abbreviationsPopup.open()
+
+                PillLabel {                          // how many there are
+                    visible: view.abbreviations.length > 0
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    anchors.rightMargin: -6
+                    anchors.topMargin: -2
+                    height: 16
+                    width: Math.max(16, implicitWidth - 6)
+                    text: view.abbreviations.length
+                    tint: Theme.highlightColor("green")
+                    textColor: Theme.text
+                }
+                AppToolTip {
+                    text: "Abbreviations"
+                    shown: abbreviationsButton.hovered && !abbreviationsPopup.visible
+                }
+                Popup {
+                    id: abbreviationsPopup
+                    x: 0
+                    y: -height - 8
+                    width: Math.min(Math.max(view.sideWidth, 280), 360)
+                    height: Math.min(abbreviationsColumn.contentHeight + topPadding + bottomPadding, 340)
+                    padding: 6
+                    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+                    background: Surface { elevation: 2; radius: 14 }
+                    enter: Transition {
+                        NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 110 }
+                        NumberAnimation { property: "scale"; from: 0.96; to: 1; duration: 140; easing.type: Easing.OutCubic }
+                    }
+                    exit: Transition { NumberAnimation { property: "opacity"; to: 0; duration: 80 } }
+
+                    ListView {
+                        id: abbreviationsColumn
+                        anchors.fill: parent
+                        clip: true
+                        spacing: 2
+                        model: view.abbreviations
+                        boundsBehavior: Flickable.StopAtBounds
+                        ScrollBar.vertical: ScrollBar {}
+
+                        delegate: Item {
+                            id: abbr
+                            required property var modelData
+                            width: ListView.view.width - 8
+                            height: Math.max(36, abbrText.implicitHeight + 16)
+
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: 9
+                                color: abbrHover.hovered ? Qt.alpha(Theme.text, 0.07) : "transparent"
+                            }
+                            Rectangle {
+                                x: 8
+                                y: 8
+                                width: 3
+                                height: parent.height - 16
+                                radius: 1.5
+                                color: Theme.highlightColor("green")
+                            }
+                            Text {
+                                id: abbrText
+                                x: 20
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: parent.width - x - abbrPage.width - 20
+                                text: abbr.modelData.text.replace(/\s+/g, " ").trim()
+                                wrapMode: Text.Wrap
+                                maximumLineCount: 3
+                                elide: Text.ElideRight
+                                font.pixelSize: 13
+                                color: Theme.text
+                            }
+                            CapsLabel {
+                                id: abbrPage
+                                anchors.right: parent.right
+                                anchors.rightMargin: 10
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "p. " + abbr.modelData.page
+                                color: Theme.textFaint
+                            }
+                            HoverHandler { id: abbrHover; cursorShape: Qt.PointingHandCursor }
+                            ClickHandler { onTapped: view.goToPage(abbr.modelData.page) }
+                        }
+                    }
+                }
+            }
+
             // Export what was written about this PDF: a plain icon.
             IconButton {
                 id: exportButton
@@ -820,10 +1073,9 @@ Item {
             Behavior on opacity { NumberAnimation { duration: Theme.listEnterDuration; easing.type: Easing.OutCubic } }
             Behavior on y { NumberAnimation { duration: Theme.listEnterDuration; easing.type: Easing.OutCubic } }
 
-            GlassPanel {
+            GlassPanel {                                   // no backdrop: a solid face
                 anchors.fill: parent
                 radius: height / 2
-                backdrop: view.hasDocument ? pages : null
             }
             HoverHandler { id: barHover }
 
@@ -886,7 +1138,7 @@ Item {
                 }
                 // zoom level (click it: back to 100%) and wide mode
                 Item {
-                    visible: view.hasDocument
+                    visible: view.hasDocument && !view.textLayout
                     width: zoomTools.width + 8
                     height: 34
                     Well { anchors.fill: parent; radius: height / 2 }
@@ -1000,6 +1252,7 @@ Item {
                             onClicked: view.zoomBy(1 / view.zoom, pages.width / 2, pages.height / 2)
                         }
                         IconButton {
+                            visible: !view.reading                  // (reading mode has its own width)
                             compact: true
                             implicitHeight: 26
                             iconSource: view.wide ? Theme.iconShrink : Theme.iconExpand
@@ -1010,7 +1263,7 @@ Item {
                 }
 
                 Rectangle {                                // a thin divider between the groups
-                    visible: view.hasDocument
+                    visible: view.hasDocument && !view.textLayout
                     anchors.verticalCenter: parent.verticalCenter
                     width: 1
                     height: 20
@@ -1018,7 +1271,7 @@ Item {
                 }
                 // dark mode
                 Item {
-                    visible: view.hasDocument
+                    visible: view.hasDocument && !view.textLayout
                     width: 34
                     height: 34
                     Well { anchors.fill: parent; radius: height / 2 }
@@ -1032,6 +1285,101 @@ Item {
                         onClicked: view.dark = !view.dark
                     }
                 }
+
+                Rectangle {                                // a thin divider between the groups
+                    visible: view.hasDocument
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 1
+                    height: 20
+                    color: Theme.hairlineStrong
+                }
+                // reading mode (R): full screen, only the document
+                Item {
+                    visible: view.hasDocument
+                    width: 34
+                    height: 34
+                    Well { anchors.fill: parent; radius: height / 2 }
+                    IconButton {
+                        id: readingButton
+                        anchors.centerIn: parent
+                        compact: true
+                        implicitHeight: 26
+                        implicitWidth: 26
+                        iconSource: Theme.iconReading
+                        active: view.reading
+                        onClicked: view.setReading(!view.reading)
+                        AppToolTip {
+                            text: view.reading ? "Leave reading mode (Esc)" : "Reading mode (R)"
+                            shown: readingButton.hovered
+                        }
+                    }
+                }
+                // what reading mode can do
+                Item {
+                    visible: view.reading
+                    width: readingTools.width + 8
+                    height: 34
+                    Well { anchors.fill: parent; radius: height / 2 }
+                    Row {
+                        id: readingTools
+                        anchors.centerIn: parent
+                        spacing: 2
+                        AppButton {
+                            id: layoutButton
+                            compact: true
+                            implicitHeight: 26
+                            text: view.readingText ? "Pages" : "Text"
+                            font.pixelSize: 12
+                            onClicked: view.setReadingText(!view.readingText)
+                            AppToolTip {
+                                text: view.readingText ? "Show the pages (T)" : "Only the text, reflowed (T)"
+                                shown: layoutButton.hovered
+                            }
+                        }
+                        AppButton {
+                            id: hazeButton
+                            compact: true
+                            implicitHeight: 26
+                            text: "Focus"
+                            font.pixelSize: 12
+                            active: view.readingHaze
+                            onClicked: view.readingHaze = !view.readingHaze
+                            AppToolTip {
+                                text: "Haze what is below the pointer (F)"
+                                shown: hazeButton.hovered
+                            }
+                        }
+                        AppButton {
+                            id: smallerButton
+                            visible: view.textLayout
+                            compact: true
+                            implicitHeight: 26
+                            text: "A−"
+                            font.pixelSize: 12
+                            onClicked: view.setReadingSize(view.readingSize - 2)
+                            AppToolTip { text: "Smaller text (Ctrl + wheel)"; shown: smallerButton.hovered }
+                        }
+                        AppButton {
+                            id: biggerButton
+                            visible: view.textLayout
+                            compact: true
+                            implicitHeight: 26
+                            text: "A+"
+                            font.pixelSize: 12
+                            onClicked: view.setReadingSize(view.readingSize + 2)
+                            AppToolTip { text: "Bigger text (Ctrl + wheel)"; shown: biggerButton.hovered }
+                        }
+                        AppButton {
+                            id: toneButton
+                            compact: true
+                            implicitHeight: 26
+                            text: view.readingTone.charAt(0).toUpperCase() + view.readingTone.slice(1)
+                            font.pixelSize: 12
+                            onClicked: view.cycleTone()
+                            AppToolTip { text: "Dark, sepia or light"; shown: toneButton.hovered }
+                        }
+                    }
+                }
             }
         }
     }
@@ -1039,9 +1387,16 @@ Item {
     // ----------------------------------------------------------------- centre column
     // The PDF stands in front of the side columns: a raised panel behind it, throwing a wide
     // shadow onto them, and drawn above them (the side columns are at z 0).
+    // Reading mode: the whole window is the desk.
+    Rectangle {
+        visible: view.reading
+        anchors.fill: parent
+        z: 0.5
+        color: view.tone.desk
+    }
     Item {
         id: stage
-        visible: view.hasDocument
+        visible: view.hasDocument && !view.reading
         z: 1
         width: view.centerWidth
         anchors.horizontalCenter: parent.horizontalCenter
@@ -1069,7 +1424,7 @@ Item {
     }
     ListView {
         id: pages
-        visible: view.hasDocument
+        visible: view.hasDocument && !view.textLayout
         z: 2
         width: view.centerWidth
         anchors.horizontalCenter: parent.horizontalCenter
@@ -1477,12 +1832,13 @@ Item {
     // dragging still reach the list.
     Item {
         id: inputLayer
-        visible: view.hasDocument
+        visible: view.hasDocument && !view.textLayout
         anchors.fill: pages
         z: 5
 
         // Ctrl + wheel zooms.
         WheelHandler {
+            enabled: !(view.noteBoxOpen && noteBox.hovered)
             acceptedModifiers: Qt.ControlModifier
             onWheel: (event) => view.zoomBy(event.angleDelta.y > 0 ? 1.1 : 1 / 1.1,
                                             point.position.x, point.position.y)
@@ -1492,6 +1848,7 @@ Item {
         // usual 3 lines per notch) times the PDF scroll speed from the settings, eased instead
         // of jumping. Touchpads already send smooth pixel deltas, which are applied directly.
         WheelHandler {
+            enabled: !(view.noteBoxOpen && noteBox.hovered)
             acceptedModifiers: Qt.NoModifier
             acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
             onWheel: (event) => {
@@ -1658,6 +2015,7 @@ Item {
 
     // ----------------------------------------------------------------- right column
     ColumnLayout {
+        visible: !view.reading
         anchors.right: parent.right
         anchors.top: parent.top
         anchors.bottom: parent.bottom
@@ -1798,6 +2156,179 @@ Item {
                 }
             }
         }
+    }
+
+    // ---------------------------------------------- reading mode: the text alone, reflowed
+    // Every page's text as paragraphs in one calm column (Ctrl + wheel or A- / A+ for the size).
+    // Notes still belong to the page that is showing; highlights are only drawn on the pages.
+    ListView {
+        id: reader
+        visible: view.textLayout
+        z: 2
+        anchors.fill: parent
+        clip: true
+        model: view.textLayout ? doc.pageCount : 0
+        boundsBehavior: Flickable.StopAtBounds
+        onContentYChanged: if (view.textLayout) view.updateCurrentPage()
+        onHeightChanged: if (view.textLayout) view.updateCurrentPage()
+        ScrollBar.vertical: AppScrollBar { z: 6 }
+
+        WheelHandler {
+            acceptedModifiers: Qt.ControlModifier
+            onWheel: (event) => view.setReadingSize(view.readingSize + (event.angleDelta.y > 0 ? 2 : -2))
+        }
+
+        footer: Item {
+            width: reader.width
+            height: 180
+            Column {
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: 24
+                spacing: 12
+                CapsLabel {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "End of document"
+                    color: view.tone.faint
+                }
+                AppButton {
+                    visible: view.status !== "finished"
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "Mark as finished"
+                    filled: true
+                    onClicked: view.controller.setResourceStatus(view.resourceId, "finished")
+                }
+            }
+        }
+
+        delegate: Item {
+            id: sheet
+            required property int index
+            readonly property var paragraphs: view.paragraphsOf(doc.getAllText(index).text)
+
+            width: reader.width
+            height: column.height + 72
+
+            Column {
+                id: column
+                y: 36
+                x: (parent.width - width) / 2
+                width: Math.min(reader.width - 48, view.readingSize * 32)
+                spacing: view.readingSize * 0.8
+
+                CapsLabel {
+                    text: "Page " + (sheet.index + 1)
+                    color: view.tone.faint
+                }
+                Repeater {
+                    model: sheet.paragraphs
+                    TextEdit {
+                        required property string modelData
+                        width: column.width
+                        readOnly: true
+                        selectByMouse: true
+                        wrapMode: TextEdit.Wrap
+                        textFormat: TextEdit.RichText
+                        font.family: Theme.serifFont
+                        font.pixelSize: view.readingSize
+                        color: view.tone.text
+                        selectionColor: Theme.selection
+                        selectedTextColor: "white"
+                        text: "<div style='line-height:150%'>"
+                              + modelData.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+                              + "</div>"
+                    }
+                }
+                Text {
+                    visible: sheet.paragraphs.length === 0
+                    text: "No text on this page"
+                    font.italic: true
+                    font.pixelSize: 14
+                    color: view.tone.faint
+                }
+            }
+        }
+    }
+
+    // ----------------------------------------------------- reading mode: the haze and the progress
+    // Everything below the pointer is hazed, so it is clear which line is being read. Passive: the
+    // pointer goes through to the page.
+    HoverHandler {
+        enabled: view.reading
+        onPointChanged: haze.pointerY = point.position.y
+    }
+    Item {
+        id: haze
+        visible: view.reading && view.readingHaze && view.hasDocument && view.activeSelection === null
+        z: 7
+        anchors.fill: parent
+        property real pointerY: view.height * 0.35
+        Behavior on pointerY { NumberAnimation { duration: 90; easing.type: Easing.OutCubic } }
+
+        // about one and a bit lines below the pointer the glass starts, and frosts in over `feather`
+        readonly property real lineHeight: view.textLayout ? view.readingSize * 1.5 : 28 * view.zoom
+        readonly property real clearUntil: pointerY + lineHeight * 1.25
+        readonly property real featherHeight: Math.max(36, lineHeight * 1.5)
+
+        // A frosted pane over the lower part of the document: a blurred copy of what is under it,
+        // fading in from nothing at the top, plus a light wash of the desk colour.
+        Item {
+            id: glass
+            y: haze.clearUntil
+            width: parent.width
+            height: Math.max(0, parent.height - y)
+
+            ShaderEffectSource {
+                id: snapshot
+                sourceItem: view.scroller
+                visible: false
+                sourceRect: {
+                    haze.clearUntil                      // follow the glass and the scrolling
+                    view.scroller.contentY
+                    view.scroller.contentX
+                    const p = glass.mapToItem(view.scroller, 0, 0)
+                    return Qt.rect(p.x, p.y, glass.width, glass.height)
+                }
+            }
+            Item {                                       // how much of the blur shows: none -> all
+                id: fade
+                anchors.fill: parent
+                visible: false
+                layer.enabled: true
+                Rectangle {
+                    anchors.fill: parent
+                    gradient: Gradient {
+                        GradientStop { position: 0; color: "#00000000" }
+                        GradientStop { position: Math.min(1, haze.featherHeight / Math.max(1, fade.height)); color: "black" }
+                        GradientStop { position: 1; color: "black" }
+                    }
+                }
+            }
+            MultiEffect {
+                anchors.fill: parent
+                source: snapshot
+                blurEnabled: true
+                blur: 1
+                blurMax: 64
+                maskEnabled: true
+                maskSource: fade
+            }
+            Rectangle {                                  // the frost
+                anchors.fill: parent
+                gradient: Gradient {
+                    GradientStop { position: 0; color: Qt.alpha(view.tone.desk, 0) }
+                    GradientStop { position: Math.min(1, haze.featherHeight / Math.max(1, glass.height)); color: Qt.alpha(view.tone.desk, 0.5) }
+                    GradientStop { position: 1; color: Qt.alpha(view.tone.desk, 0.5) }
+                }
+            }
+        }
+    }
+    Rectangle {                                  // how far through the document (reading mode)
+        visible: view.reading
+        z: 9
+        anchors.bottom: parent.bottom
+        width: view.width * view.readingProgress
+        height: 3
+        color: Theme.accent
     }
 
     // ------------------------------------------------------------ search bar (Ctrl+F)

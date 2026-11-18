@@ -26,6 +26,10 @@ GlassPanel {
     signal submitted()
     signal cancelled()
 
+    // Whether the pointer is over the box: the page behind it must not take the wheel then.
+    readonly property bool hovered: boxHover.hovered
+    HoverHandler { id: boxHover }
+
     height: column.implicitHeight + 24
     edgeColor: Qt.alpha(accent, 0.55)
     edgeWidth: 1.5
@@ -54,13 +58,46 @@ GlassPanel {
             barColor: Theme.highlightBar(box.quoteColor)
         }
 
-        NoteTextArea {
-            id: noteInput
+        // The box keeps its height: longer text scrolls inside it (wheel or scroll bar), and the
+        // view follows the cursor.
+        Item {
             Layout.fillWidth: true
-            references: box.controller
-            placeholderText: box.kind === "question" ? "Ask a question..." : "Write a note..."
-            onCancelled: box.cancelled()
-            onSubmitted: box.submitted()
+            implicitHeight: noteInput.minHeight
+
+            Well {
+                anchors.fill: parent
+                radius: 12
+                focused: noteInput.activeFocus
+            }
+            Flickable {
+                id: inputFlick
+                anchors.fill: parent
+                anchors.topMargin: 2
+                anchors.bottomMargin: 2
+                clip: true
+                contentWidth: width
+                contentHeight: noteInput.height
+                boundsBehavior: Flickable.StopAtBounds
+                ScrollBar.vertical: AppScrollBar {}
+
+                function followCursor(r) {
+                    if (r.y < contentY) contentY = Math.max(0, r.y - noteInput.topPadding)
+                    else if (r.y + r.height > contentY + height)
+                        contentY = r.y + r.height + noteInput.bottomPadding - height
+                }
+
+                NoteTextArea {
+                    id: noteInput
+                    width: inputFlick.width
+                    autoGrow: true
+                    background: null              // the Well behind the Flickable is the face
+                    references: box.controller
+                    placeholderText: box.kind === "question" ? "Ask a question..." : "Write a note..."
+                    onCancelled: box.cancelled()
+                    onSubmitted: box.submitted()
+                    onCursorRectangleChanged: inputFlick.followCursor(cursorRectangle)
+                }
+            }
         }
 
         // key hints under the text box (the header row has little room)
