@@ -163,6 +163,14 @@ Item {
         property Item entry
         onEditTriggered: entry.edit()
         onDeleteTriggered: view.session.deleteNote(entry.noteId)
+        topBefore: [
+            MenuIconButton {
+                visible: localMenu.entry !== null && localMenu.entry.isQuestion
+                text: "Copy question for an LLM"
+                iconSource: Theme.iconCopy
+                onTriggered: view.controller.copyQuestionForLlm(localMenu.entry.body, "")
+            }
+        ]
         AppMenuItem {
             text: "Change timestamp..."
             onTriggered: timePrompt.ask(localMenu.entry.noteId, true)
@@ -183,6 +191,14 @@ Item {
         property Item entry
         onEditTriggered: entry.edit()
         onDeleteTriggered: view.session.deleteNote(entry.noteId)
+        topBefore: [
+            MenuIconButton {
+                visible: globalMenu.entry !== null && globalMenu.entry.isQuestion
+                text: "Copy question for an LLM"
+                iconSource: Theme.iconCopy
+                onTriggered: view.controller.copyQuestionForLlm(globalMenu.entry.body, "")
+            }
+        ]
         AppMenuItem {
             text: "Pin to a moment..."
             onTriggered: timePrompt.ask(globalMenu.entry.noteId, false)
