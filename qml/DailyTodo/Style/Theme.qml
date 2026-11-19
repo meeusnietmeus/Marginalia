@@ -190,7 +190,6 @@ QtObject {
     readonly property url iconSparkles: Qt.resolvedUrl("icons/sparkles.svg")
     readonly property url iconAbbreviations: Qt.resolvedUrl("icons/letter-text.svg")
     readonly property url iconPaste: Qt.resolvedUrl("icons/clipboard-paste.svg")
-    readonly property url iconAbbreviations: Qt.resolvedUrl("icons/letter-text.svg")
 
     // ---- library resource cards: icon + gradient colour per kind of resource ----
     readonly property color resourcePdf: "#c8504b"
